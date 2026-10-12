@@ -1,0 +1,12 @@
+.venv/
+.env
+__pycache__/
+*.pyc
+data/
+.agent*
+*.db*
+artifacts/private/
+*.egg-info/
+.ruff_cache/
+*.log
+.DS_Store

@@ -1,0 +1,143 @@
+{
+  "test_data": true,
+  "passed": true,
+  "scenarios": [
+    {
+      "scenario": "test_intake.Intake.test_equivalent_timezone_slots_normalize",
+      "status": "passed"
+    },
+    {
+      "scenario": "test_intake.Intake.test_existing_booking_database_migrates_without_losing_evidence",
+      "status": "passed"
+    },
+    {
+      "scenario": "test_intake.Intake.test_malformed_model_fields_are_rejected",
+      "status": "passed"
+    },
+    {
+      "scenario": "test_intake.Intake.test_old_reject_card_cannot_cancel_current_hold",
+      "status": "passed"
+    },
+    {
+      "scenario": "test_intake.Intake.test_planner_form_selection",
+      "status": "passed"
+    },
+    {
+      "scenario": "test_intake.Intake.test_requested_held_confirmed_completed_lifecycle",
+      "status": "passed"
+    },
+    {
+      "scenario": "test_intake.Intake.test_unknown_request_does_not_reuse_old_job",
+      "status": "passed"
+    },
+    {
+      "scenario": "test_payments.GatewayBoundary.test_embedded_test_checkout_binds_booking",
+      "status": "passed"
+    },
+    {
+      "scenario": "test_payments.GatewayBoundary.test_foreign_transaction_or_protocol_terms_rejected",
+      "status": "passed"
+    },
+    {
+      "scenario": "test_payments.GatewayBoundary.test_gateway_error_preserves_pending_intent",
+      "status": "passed"
+    },
+    {
+      "scenario": "test_payments.GatewayBoundary.test_gateway_identity_amount_and_mode_revalidated",
+      "status": "passed"
+    },
+    {
+      "scenario": "test_payments.GatewayBoundary.test_gateway_not_called_before_consent",
+      "status": "passed"
+    },
+    {
+      "scenario": "test_payments.GatewayBoundary.test_late_gateway_payment_refunded_once",
+      "status": "passed"
+    },
+    {
+      "scenario": "test_payments.GatewayBoundary.test_live_secret_key_is_refused",
+      "status": "passed"
+    },
+    {
+      "scenario": "test_proofs.Proofs.test_01_expired_hold_cannot_confirm",
+      "status": "passed"
+    },
+    {
+      "scenario": "test_proofs.Proofs.test_02_simultaneous_customers_one_winner",
+      "status": "passed"
+    },
+    {
+      "scenario": "test_proofs.Proofs.test_03_quote_change_requires_new_consent",
+      "status": "passed"
+    },
+    {
+      "scenario": "test_proofs.Proofs.test_04_no_payment_without_approval",
+      "status": "passed"
+    },
+    {
+      "scenario": "test_proofs.Proofs.test_05_duplicate_retry_single_payment",
+      "status": "passed"
+    },
+    {
+      "scenario": "test_proofs.Proofs.test_06_payment_decline_releases_slot",
+      "status": "passed"
+    },
+    {
+      "scenario": "test_proofs.Proofs.test_07_provider_decline_compensates",
+      "status": "passed"
+    },
+    {
+      "scenario": "test_proofs.Proofs.test_08_honest_trust_labels",
+      "status": "passed"
+    },
+    {
+      "scenario": "test_proofs.Proofs.test_09_expiry_checked_at_appointment",
+      "status": "passed"
+    },
+    {
+      "scenario": "test_proofs.Proofs.test_10_recovery_within_limits_requires_review",
+      "status": "passed"
+    },
+    {
+      "scenario": "test_proofs.Proofs.test_11_audit_reconstructs_snapshot_and_consequences",
+      "status": "passed"
+    },
+    {
+      "scenario": "test_proofs.Proofs.test_12_restricted_actions_route_to_review",
+      "status": "passed"
+    },
+    {
+      "scenario": "test_proofs.Proofs.test_13_conversation_isolation",
+      "status": "passed"
+    },
+    {
+      "scenario": "test_proofs.Proofs.test_14_late_gateway_success_needs_refund",
+      "status": "passed"
+    },
+    {
+      "scenario": "test_proofs.Proofs.test_15_out_of_scope_and_budget",
+      "status": "passed"
+    },
+    {
+      "scenario": "test_proofs.Proofs.test_16_conversation_approval_and_recovery",
+      "status": "passed"
+    },
+    {
+      "scenario": "test_proofs.Proofs.test_17_prose_approval_negation_is_rejected",
+      "status": "passed"
+    },
+    {
+      "scenario": "test_proofs.Proofs.test_18_live_payment_mode_refused",
+      "status": "passed"
+    },
+    {
+      "scenario": "test_proofs.Proofs.test_19_expired_quote_offers_fresh_alternatives",
+      "status": "passed"
+    },
+    {
+      "scenario": "test_proofs.Proofs.test_20_provider_reports_actual_slot_capacity",
+      "status": "passed"
+    }
+  ],
+  "mesh": "passed"
+}

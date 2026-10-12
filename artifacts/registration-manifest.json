@@ -1,0 +1,144 @@
+[
+  {
+    "role": "concierge",
+    "name": "ServiceSetu-concierge",
+    "address": "agent1q02ftm6eu39lw0vc5kh3uhr4gtkkeqd6jpcaxzn4gyyrc2ac0p9ecvl39sz",
+    "endpoint": "https://agentverse.ai/v2/agents/mailbox/submit",
+    "protocols": [
+      "proto:30a801ed3a83f9a0ff0a9f1e6fe958cb91da1fc2218b153df7b6cbf87bd33d62",
+      "proto:74bbe17d083d81bf3afb28af299aa285d3bf800ac264775923cdd3cb7b47d069"
+    ],
+    "registration_status": "not_verified",
+    "readme": "# ServiceSetu concierge\n\n![tag:innovationlab](https://img.shields.io/badge/innovationlab-3D8BD3)\n![tag:hackathon](https://img.shields.io/badge/hackathon-5F43F1)\n\nBook a fictional AC servicing or plumbing visit in Indiranagar, Bengaluru. Compare provider agents, see honest trust labels, approve one quote, receive a test booking, and recover from provider cancellation. Try: AC service in Indiranagar Bengaluru tomorrow 10am under INR 1000. Ask show what happened for an audit timeline. Providers, credentials and registry are seeded test data. Payment is simulated or Stripe test mode; no real service or money. Discretionary refunds, payouts and verification overrides require human review.\n"
+  },
+  {
+    "role": "matching",
+    "name": "ServiceSetu-matching",
+    "address": "agent1q0k2tclxlfnags9m8qc6k8kwg4sfjwqeympvvu0t4nrm3e7mt6pp7x6qq53",
+    "endpoint": "https://agentverse.ai/v2/agents/mailbox/submit",
+    "protocols": [
+      "proto:f1a059b10d108a7d5e4a56c7d9c1e4ce910ec8023f07566d67de38f3808eb2ed"
+    ],
+    "registration_status": "not_verified",
+    "readme": "# ServiceSetu matching\n\n![tag:innovationlab](https://img.shields.io/badge/innovationlab-3D8BD3)\n![tag:hackathon](https://img.shields.io/badge/hackathon-5F43F1)\n\nInternal ServiceSetu matching specialist. Not a customer chat entry point. Accepts typed Work messages only from the Concierge. Providers, credentials and registry are seeded test data. Payment is simulated or Stripe test mode; no real service or money. Discretionary refunds, payouts and verification overrides require human review.\n"
+  },
+  {
+    "role": "verification",
+    "name": "ServiceSetu-verification",
+    "address": "agent1qfflx4d9w2j7nx2z64ajvjsz8jlmd6wekp6q2kv3dcerafyu3r8gsr7q8aj",
+    "endpoint": "https://agentverse.ai/v2/agents/mailbox/submit",
+    "protocols": [
+      "proto:f1a059b10d108a7d5e4a56c7d9c1e4ce910ec8023f07566d67de38f3808eb2ed"
+    ],
+    "registration_status": "not_verified",
+    "readme": "# ServiceSetu verification\n\n![tag:innovationlab](https://img.shields.io/badge/innovationlab-3D8BD3)\n![tag:hackathon](https://img.shields.io/badge/hackathon-5F43F1)\n\nInternal ServiceSetu verification specialist. Not a customer chat entry point. Accepts typed Work messages only from the Concierge. Providers, credentials and registry are seeded test data. Payment is simulated or Stripe test mode; no real service or money. Discretionary refunds, payouts and verification overrides require human review.\n"
+  },
+  {
+    "role": "booking",
+    "name": "ServiceSetu-booking",
+    "address": "agent1qfs7ryjyx8y9cnyzduds9p6qg39fquzmscy97z86f4ytp49u2c29z9fzuuc",
+    "endpoint": "https://agentverse.ai/v2/agents/mailbox/submit",
+    "protocols": [
+      "proto:f1a059b10d108a7d5e4a56c7d9c1e4ce910ec8023f07566d67de38f3808eb2ed"
+    ],
+    "registration_status": "not_verified",
+    "readme": "# ServiceSetu booking\n\n![tag:innovationlab](https://img.shields.io/badge/innovationlab-3D8BD3)\n![tag:hackathon](https://img.shields.io/badge/hackathon-5F43F1)\n\nInternal ServiceSetu booking specialist. Not a customer chat entry point. Accepts typed Work messages only from the Concierge. Providers, credentials and registry are seeded test data. Payment is simulated or Stripe test mode; no real service or money. Discretionary refunds, payouts and verification overrides require human review.\n"
+  },
+  {
+    "role": "payment",
+    "name": "ServiceSetu-payment",
+    "address": "agent1qdjrmxgpq6c5uxqmkr9j5g0appkn026zezv4juk7qchy8yyy6sx5szzylzt",
+    "endpoint": "https://agentverse.ai/v2/agents/mailbox/submit",
+    "protocols": [
+      "proto:f1a059b10d108a7d5e4a56c7d9c1e4ce910ec8023f07566d67de38f3808eb2ed"
+    ],
+    "registration_status": "not_verified",
+    "readme": "# ServiceSetu payment\n\n![tag:innovationlab](https://img.shields.io/badge/innovationlab-3D8BD3)\n![tag:hackathon](https://img.shields.io/badge/hackathon-5F43F1)\n\nInternal ServiceSetu payment specialist. Not a customer chat entry point. Accepts typed Work messages only from the Concierge. Providers, credentials and registry are seeded test data. Payment is simulated or Stripe test mode; no real service or money. Discretionary refunds, payouts and verification overrides require human review.\n"
+  },
+  {
+    "role": "recovery",
+    "name": "ServiceSetu-recovery",
+    "address": "agent1qtsmphqqq6du7cl0nrsepp092fqq7vmd97tygsmh4fu9yh5yagxejqvnd8j",
+    "endpoint": "https://agentverse.ai/v2/agents/mailbox/submit",
+    "protocols": [
+      "proto:f1a059b10d108a7d5e4a56c7d9c1e4ce910ec8023f07566d67de38f3808eb2ed"
+    ],
+    "registration_status": "not_verified",
+    "readme": "# ServiceSetu recovery\n\n![tag:innovationlab](https://img.shields.io/badge/innovationlab-3D8BD3)\n![tag:hackathon](https://img.shields.io/badge/hackathon-5F43F1)\n\nInternal ServiceSetu recovery specialist. Not a customer chat entry point. Accepts typed Work messages only from the Concierge. Providers, credentials and registry are seeded test data. Payment is simulated or Stripe test mode; no real service or money. Discretionary refunds, payouts and verification overrides require human review.\n"
+  },
+  {
+    "role": "trust_monitor",
+    "name": "ServiceSetu-trust_monitor",
+    "address": "agent1qdldgm8c67xeh2q45pn3d7nm4hx297t3rzkju00z79vflev9kwlrc5jv84r",
+    "endpoint": "https://agentverse.ai/v2/agents/mailbox/submit",
+    "protocols": [],
+    "registration_status": "not_verified",
+    "readme": "# ServiceSetu trust_monitor\n\n![tag:innovationlab](https://img.shields.io/badge/innovationlab-3D8BD3)\n![tag:hackathon](https://img.shields.io/badge/hackathon-5F43F1)\n\nInternal ServiceSetu trust_monitor specialist. Not a customer chat entry point. Accepts typed Work messages only from the Concierge. Providers, credentials and registry are seeded test data. Payment is simulated or Stripe test mode; no real service or money. Discretionary refunds, payouts and verification overrides require human review.\n"
+  },
+  {
+    "role": "provider:p1",
+    "name": "ServiceSetu-provider-p1",
+    "address": "agent1qw8325ts8p5zk08l65zl25v5587v60mxve939zysj3krsqaaazmu5lskhek",
+    "endpoint": "https://agentverse.ai/v2/agents/mailbox/submit",
+    "protocols": [
+      "proto:f1a059b10d108a7d5e4a56c7d9c1e4ce910ec8023f07566d67de38f3808eb2ed"
+    ],
+    "registration_status": "not_verified",
+    "readme": "# ServiceSetu provider:p1\n\n![tag:innovationlab](https://img.shields.io/badge/innovationlab-3D8BD3)\n![tag:hackathon](https://img.shields.io/badge/hackathon-5F43F1)\n\nInternal ServiceSetu provider:p1 specialist. Not a customer chat entry point. Accepts typed Work messages only from the Concierge. Providers, credentials and registry are seeded test data. Payment is simulated or Stripe test mode; no real service or money. Discretionary refunds, payouts and verification overrides require human review.\n"
+  },
+  {
+    "role": "provider:p2",
+    "name": "ServiceSetu-provider-p2",
+    "address": "agent1qgjgspkhhlueg983p445y998xxnt8uek75nxc7gy8skmqwxnweeus29ln7k",
+    "endpoint": "https://agentverse.ai/v2/agents/mailbox/submit",
+    "protocols": [
+      "proto:f1a059b10d108a7d5e4a56c7d9c1e4ce910ec8023f07566d67de38f3808eb2ed"
+    ],
+    "registration_status": "not_verified",
+    "readme": "# ServiceSetu provider:p2\n\n![tag:innovationlab](https://img.shields.io/badge/innovationlab-3D8BD3)\n![tag:hackathon](https://img.shields.io/badge/hackathon-5F43F1)\n\nInternal ServiceSetu provider:p2 specialist. Not a customer chat entry point. Accepts typed Work messages only from the Concierge. Providers, credentials and registry are seeded test data. Payment is simulated or Stripe test mode; no real service or money. Discretionary refunds, payouts and verification overrides require human review.\n"
+  },
+  {
+    "role": "provider:p3",
+    "name": "ServiceSetu-provider-p3",
+    "address": "agent1qgkktdv47ldl0qfrermy6u5vhedtzm599kux86yrpy7aqhagjysrudfddhl",
+    "endpoint": "https://agentverse.ai/v2/agents/mailbox/submit",
+    "protocols": [
+      "proto:f1a059b10d108a7d5e4a56c7d9c1e4ce910ec8023f07566d67de38f3808eb2ed"
+    ],
+    "registration_status": "not_verified",
+    "readme": "# ServiceSetu provider:p3\n\n![tag:innovationlab](https://img.shields.io/badge/innovationlab-3D8BD3)\n![tag:hackathon](https://img.shields.io/badge/hackathon-5F43F1)\n\nInternal ServiceSetu provider:p3 specialist. Not a customer chat entry point. Accepts typed Work messages only from the Concierge. Providers, credentials and registry are seeded test data. Payment is simulated or Stripe test mode; no real service or money. Discretionary refunds, payouts and verification overrides require human review.\n"
+  },
+  {
+    "role": "provider:p4",
+    "name": "ServiceSetu-provider-p4",
+    "address": "agent1qdsl2u234dwfpr4un02mkhxk073apx5h6cste5eukcwrmgykmy67vc4pyjr",
+    "endpoint": "https://agentverse.ai/v2/agents/mailbox/submit",
+    "protocols": [
+      "proto:f1a059b10d108a7d5e4a56c7d9c1e4ce910ec8023f07566d67de38f3808eb2ed"
+    ],
+    "registration_status": "not_verified",
+    "readme": "# ServiceSetu provider:p4\n\n![tag:innovationlab](https://img.shields.io/badge/innovationlab-3D8BD3)\n![tag:hackathon](https://img.shields.io/badge/hackathon-5F43F1)\n\nInternal ServiceSetu provider:p4 specialist. Not a customer chat entry point. Accepts typed Work messages only from the Concierge. Providers, credentials and registry are seeded test data. Payment is simulated or Stripe test mode; no real service or money. Discretionary refunds, payouts and verification overrides require human review.\n"
+  },
+  {
+    "role": "provider:p5",
+    "name": "ServiceSetu-provider-p5",
+    "address": "agent1qwyurpzgm7y3luc5utlpgtu84e7gvy38axnkrpvnthcyechdhj9cxxr2zuy",
+    "endpoint": "https://agentverse.ai/v2/agents/mailbox/submit",
+    "protocols": [
+      "proto:f1a059b10d108a7d5e4a56c7d9c1e4ce910ec8023f07566d67de38f3808eb2ed"
+    ],
+    "registration_status": "not_verified",
+    "readme": "# ServiceSetu provider:p5\n\n![tag:innovationlab](https://img.shields.io/badge/innovationlab-3D8BD3)\n![tag:hackathon](https://img.shields.io/badge/hackathon-5F43F1)\n\nInternal ServiceSetu provider:p5 specialist. Not a customer chat entry point. Accepts typed Work messages only from the Concierge. Providers, credentials and registry are seeded test data. Payment is simulated or Stripe test mode; no real service or money. Discretionary refunds, payouts and verification overrides require human review.\n"
+  },
+  {
+    "role": "provider:p6",
+    "name": "ServiceSetu-provider-p6",
+    "address": "agent1q2n5kl49rvqrze00utqlpzakgxy0fgr99rnd3vpgrzlcarrpeg04wg2ecga",
+    "endpoint": "https://agentverse.ai/v2/agents/mailbox/submit",
+    "protocols": [
+      "proto:f1a059b10d108a7d5e4a56c7d9c1e4ce910ec8023f07566d67de38f3808eb2ed"
+    ],
+    "registration_status": "not_verified",
+    "readme": "# ServiceSetu provider:p6\n\n![tag:innovationlab](https://img.shields.io/badge/innovationlab-3D8BD3)\n![tag:hackathon](https://img.shields.io/badge/hackathon-5F43F1)\n\nInternal ServiceSetu provider:p6 specialist. Not a customer chat entry point. Accepts typed Work messages only from the Concierge. Providers, credentials and registry are seeded test data. Payment is simulated or Stripe test mode; no real service or money. Discretionary refunds, payouts and verification overrides require human review.\n"
+  }
+]

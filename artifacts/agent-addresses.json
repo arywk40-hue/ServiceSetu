@@ -1,0 +1,15 @@
+{
+  "concierge": "agent1q02ftm6eu39lw0vc5kh3uhr4gtkkeqd6jpcaxzn4gyyrc2ac0p9ecvl39sz",
+  "matching": "agent1q0k2tclxlfnags9m8qc6k8kwg4sfjwqeympvvu0t4nrm3e7mt6pp7x6qq53",
+  "verification": "agent1qfflx4d9w2j7nx2z64ajvjsz8jlmd6wekp6q2kv3dcerafyu3r8gsr7q8aj",
+  "booking": "agent1qfs7ryjyx8y9cnyzduds9p6qg39fquzmscy97z86f4ytp49u2c29z9fzuuc",
+  "payment": "agent1qdjrmxgpq6c5uxqmkr9j5g0appkn026zezv4juk7qchy8yyy6sx5szzylzt",
+  "recovery": "agent1qtsmphqqq6du7cl0nrsepp092fqq7vmd97tygsmh4fu9yh5yagxejqvnd8j",
+  "trust_monitor": "agent1qdldgm8c67xeh2q45pn3d7nm4hx297t3rzkju00z79vflev9kwlrc5jv84r",
+  "provider:p1": "agent1qw8325ts8p5zk08l65zl25v5587v60mxve939zysj3krsqaaazmu5lskhek",
+  "provider:p2": "agent1qgjgspkhhlueg983p445y998xxnt8uek75nxc7gy8skmqwxnweeus29ln7k",
+  "provider:p3": "agent1qgkktdv47ldl0qfrermy6u5vhedtzm599kux86yrpy7aqhagjysrudfddhl",
+  "provider:p4": "agent1qdsl2u234dwfpr4un02mkhxk073apx5h6cste5eukcwrmgykmy67vc4pyjr",
+  "provider:p5": "agent1qwyurpzgm7y3luc5utlpgtu84e7gvy38axnkrpvnthcyechdhj9cxxr2zuy",
+  "provider:p6": "agent1q2n5kl49rvqrze00utqlpzakgxy0fgr99rnd3vpgrzlcarrpeg04wg2ecga"
+}
