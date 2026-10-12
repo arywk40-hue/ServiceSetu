@@ -3,6 +3,8 @@
 ![tag:innovationlab](https://img.shields.io/badge/innovationlab-3D8BD3)
 ![tag:hackathon](https://img.shields.io/badge/hackathon-5F43F1)
 
+Public hackathon repository: [arywk40-hue/ServiceSetu](https://github.com/arywk40-hue/ServiceSetu). [Remote proof runs](https://github.com/arywk40-hue/ServiceSetu/actions/workflows/proofs.yml).
+
 Book a trusted local service, approve the exact price, and recover when the provider cancels — through one ASI:One conversation. ServiceSetu coordinates independent provider agents and keeps bookings and payments in deterministic code.
 
 **Prototype only:** six fictional providers in Indiranagar, Bengaluru; AC servicing and plumbing; mock credential registry; simulated or Stripe **test** payments. No actual service, identity verification, real money, UPI integration, escrow or payout. “Verified” always refers to the mock registry. Provider-supplied documents are explicitly unverified.
@@ -140,7 +142,7 @@ The booking lifecycle persists `requested → held → confirmed → completed`,
 
 ## Current external checks and limits
 
-The local proof harness passes. Live Agentverse registration/mailbox reachability, fresh-account discovery, ASI1 calls, card rendering, embedded Stripe test checkout, and gateway compensation need actual credentials and platform testing. Public GitHub publishing, shared chat, profile URLs, demo video and Devpost submission remain separate checklist items. The [official event page](https://www.fetch.ai/events/fetch-a-thon-3) confirms October 24, 2026; the [official hackpack](https://www.fetch.ai/events/hackathons/fetch-a-thon-3/hackpack) confirms Agentverse/ACP/ASI:One requirements, a public repo and a 3–5 minute demo video (checked October 13, 2026).
+The local proof harness passes and the source is published in the public repository above. Live Agentverse registration/mailbox reachability, fresh-account discovery, ASI1 calls, card rendering, embedded Stripe test checkout, and gateway compensation need actual credentials and platform testing. Shared chat, profile URLs, demo video and Devpost submission remain separate checklist items. The [official event page](https://www.fetch.ai/events/fetch-a-thon-3) confirms October 24, 2026; the [official hackpack](https://www.fetch.ai/events/hackathons/fetch-a-thon-3/hackpack) confirms Agentverse/ACP/ASI:One requirements, a public repo and a 3–5 minute demo video (checked October 13, 2026).
 
 No production Indian registry integration, legal assessment, real customer onboarding, real UPI, calendar sync, payouts, provider web portal or live travel data. Intake supports the seeded visit scopes; additional work requires a new quote. A provider-confirmation failure is proven by injected failure in the core; the current seeded provider quote serves as provider confirmation. See [docs/submission.md](docs/submission.md) for the five-minute demo and remaining checks.
 

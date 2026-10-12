@@ -4,7 +4,7 @@ Status: local implementation and synthetic proofs ready; live platform acceptanc
 
 ## Links to record after verification
 
-- Public GitHub repo: pending publishing.
+- Public GitHub repo: [arywk40-hue/ServiceSetu](https://github.com/arywk40-hue/ServiceSetu), published and public.
 - ASI:One shared chat: pending full live conversation.
 - Concierge profile: pending registration and fresh-account discovery.
 - Specialist/provider profiles: pending registration (identities in `artifacts/registration-manifest.json`).
@@ -28,6 +28,7 @@ Do not replace these with invented links or present local dispatch as an ASI:One
 - [ ] Replacement requires new consent and respects appointment/budget limits.
 - [ ] Public audit export matches the accepted quote and payment reference.
 - [ ] Public GitHub README contains actual addresses, profile URLs and chat link.
+- [x] Public GitHub source and run instructions published; exact seed-derived addresses included. Live profile URLs and shared chat remain pending.
 - [ ] No secrets, seed files, database files or customer data are published.
 - [ ] 3–5 minute video, description and links entered in Devpost.
 - [ ] Runtime kept alive through judging.
