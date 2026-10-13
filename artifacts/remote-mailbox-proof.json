@@ -1,0 +1,364 @@
+{
+  "status": "passed",
+  "verified_at": "2026-10-13T08:41:29.860957+00:00",
+  "transport": "Agentverse hosted client \u2192 mailbox \u2192 local provider mesh",
+  "test_data": true,
+  "asi_ui_verified": false,
+  "temporary_probe_removed": true,
+  "events": [
+    {
+      "kind": "complete",
+      "replacement": "b_66ba6312eaa64f11"
+    },
+    {
+      "kind": "response",
+      "phase": "audit",
+      "text": "Immutable timeline (test data):\n#11 booking_requested \u00b7 {\"job\": {\"area\": \"indiranagar\", \"budget\": 100000, \"city\": \"bengaluru\", \"service\": \"ac\", \"slot\": \"2026-10-14T10:00:00+05:30\"}}\n#13 quote_created \u00b7 {\"digest\": \"65ca5f4c4fce4006a1fc326a9ae1d0a1e771a0a17df88b9d62cf04fe1ae7ee2b\", \"previous\": null, \"quote\": {\"amount\": 74900, \"availability\": {\"confidence\": \"provider-confirmed demo\", \"expires\": 1791881132.922066, \"hold_capable\": true, \"observed_at\": 1791880832.922066, \"source\": \"provider-agent:p2\"}, \"cancellation\": \"Demo: full test-payment reversal before work starts\", \"currency\": \"INR\", \"exclusions\": \"Parts and additional work require a new quote and approval\", \"expires\": 1791881132.9220648, \"id\": \"q_729ba5aa00324d4b\", \"kind\": \"fixed\", \"name\": \"Breeze AC\", \"owner\": \"agent1qf7n5l05x47df60z7kym8llfe04p9q0a6wpkrm07thcn6qrp42fdjendhfc:0442fcd3-0c02-4ff9-9441-a6eaa782de0e\", \"provider\": \"p2\", \"scope\": \"One AC service visit\", \"slot\": \"2026-10-14T10:00:00+05:30\", \"trust\": {\"checked_at\": \"2026-10-12T19:33:18.462195+00:00\", \"eligible\": true, \"expires\": \"2027-01-10\", \"issuer\": \"Mock Service Registry\", \"jurisdiction\": \"IN-demo\", \"method\": \"mock_lookup\", \"policy_version\": \"IN-demo-v1\", \"source\": \"seeded provider upload\", \"status\": \"provider_supplied\", \"type\": \"demo_skill_certificate\", \"verifier\": \"demo-verification-agent\"}, \"version\": 1}}\n#14 slot_held \u00b7 {\"hold_until\": 1791880976.703874, \"quote\": \"q_729ba5aa00324d4b\", \"recovery_of\": \"b_af3d56286f864886\"}\n#15 customer_approved \u00b7 {\"quote\": \"q_729ba5aa00324d4b\"}\n#16 payment_started \u00b7 {\"amount\": 74900, \"payment\": \"pay_87db1016d82544df\", \"quote\": \"q_729ba5aa00324d4b\"}\n#17 booking_confirmed \u00b7 {\"amount\": 74900, \"payment\": \"pay_87db1016d82544df\", \"quote\": \"q_729ba5aa00324d4b\"}",
+      "metadata": {}
+    },
+    {
+      "kind": "ack"
+    },
+    {
+      "kind": "response",
+      "phase": "replacement_confirmation",
+      "text": "Booking b_66ba6312eaa64f11: confirmed. Breeze AC, 2026-10-14T10:00:00+05:30, INR 749.00. Payment: paid (test mode). Ask 'show what happened' for the audit timeline.",
+      "metadata": {
+        "card_protocol_version": "1",
+        "requires_card_interaction": "true",
+        "card_kind": "detail",
+        "card_payload": "{\"title\": \"Booking confirmed \\u00b7 test mode\", \"summary_rows\": [{\"label\": \"Booking\", \"value\": \"b_66ba6312eaa64f11\"}, {\"label\": \"Provider\", \"value\": \"Breeze AC\"}, {\"label\": \"Appointment\", \"value\": \"2026-10-14T10:00:00+05:30\"}, {\"label\": \"Payment\", \"value\": \"paid\"}], \"ctas\": []}",
+        "is_terminal": "true"
+      }
+    },
+    {
+      "kind": "ack"
+    },
+    {
+      "kind": "ack"
+    },
+    {
+      "kind": "response",
+      "phase": "replacement_review",
+      "text": "Review before approving:\nProvider: Breeze AC\nAppointment: 2026-10-14T10:00:00+05:30\nFixed total: INR 749.00\nScope: One AC service visit\nExcluded: Parts and additional work require a new quote and approval\nDocuments: provider_supplied \u00b7 seeded provider upload\nChecked: 2026-10-12T19:33:18.462195+00:00\nCancellation: Demo: full test-payment reversal before work starts\nPayment: Test mode only\nQuote version: 1\nHold expires: 2026-10-13T08:42:56.703701+00:00\nTo approve this exact test booking, click Approve or reply: approve b_66ba6312eaa64f11 q_729ba5aa00324d4b [redacted approval token]",
+      "metadata": {
+        "card_protocol_version": "1",
+        "requires_card_interaction": "true",
+        "card_kind": "review",
+        "card_payload": "{\"title\": \"Approve this test booking\", \"summary_rows\": [{\"label\": \"Provider\", \"value\": \"Breeze AC\"}, {\"label\": \"Appointment\", \"value\": \"2026-10-14T10:00:00+05:30\"}, {\"label\": \"Fixed total\", \"value\": \"INR 749.00\"}, {\"label\": \"Scope\", \"value\": \"One AC service visit\"}, {\"label\": \"Excluded\", \"value\": \"Parts and additional work require a new quote and approval\"}, {\"label\": \"Documents\", \"value\": \"provider_supplied \\u00b7 seeded provider upload\"}, {\"label\": \"Checked\", \"value\": \"2026-10-12T19:33:18.462195+00:00\"}, {\"label\": \"Cancellation\", \"value\": \"Demo: full test-payment reversal before work starts\"}, {\"label\": \"Payment\", \"value\": \"Test mode only\"}, {\"label\": \"Quote version\", \"value\": \"1\"}, {\"label\": \"Hold expires\", \"value\": \"2026-10-13T08:42:56.703701+00:00\"}], \"approve_cta\": {\"label\": \"Approve test payment\", \"selection\": {\"booking_id\": \"b_66ba6312eaa64f11\", \"quote_id\": \"q_729ba5aa00324d4b\", \"approval_token\": \"[redacted approval token]\", \"action\": \"approve\"}, \"primary\": true}, \"reject_cta\": {\"label\": \"Release slot\", \"selection\": {\"booking_id\": \"b_66ba6312eaa64f11\", \"quote_id\": \"q_729ba5aa00324d4b\", \"approval_token\": \"[redacted approval token]\", \"action\": \"reject\"}}}"
+      }
+    },
+    {
+      "kind": "response",
+      "phase": "wait_cancellation",
+      "text": "Recovery alternatives \u2014 your replacement needs approval.\nq_729ba5aa00324d4b: Breeze AC, INR 749.00, 2026-10-14T10:00:00+05:30; Provider-supplied \u00b7 not independently verified; source seeded provider upload; checked 2026-10-12T19:33:18.462195+00:00. Reply select q_729ba5aa00324d4b.\nBreeze AC quotes a fixed scope of one AC service visit at \u20b9749.00 (74,900 paise, parts excluded per the stated exclusions) for a 2026-10-14 10:00 IST slot, backed by a demo trust record that was eligible at check time (2026-10-12) and expires 2027-01-10, but it is explicitly provider-supplied from a mock registry under the IN-demo policy, so it is not independently verified evidence of genuine credentials; its slot freshness is likewise short-lived, with provider-agent availability observed only ~5 minutes before expiry (hold-capable, \"provider-confirmed demo\" confidence). Lapsed AC (p3) was excluded outright because its credential expired before the service date, leaving Breeze AC as the sole fictional demo option\u2014usable for demonstration only, with no booking, payment, or credential authenticity implied.\nWhy not: Lapsed AC: Credential expired before the service date",
+      "metadata": {
+        "card_protocol_version": "1",
+        "requires_card_interaction": "true",
+        "card_kind": "carousel",
+        "card_payload": "{\"title\": \"Choose a replacement\", \"subtitle\": \"Seeded demo \\u00b7 INR \\u00b7 slot freshness checked again at approval\", \"items\": [{\"id\": \"q_729ba5aa00324d4b\", \"title\": \"Breeze AC\", \"subtitle\": \"2026-10-14T10:00:00+05:30\", \"secondary_text\": \"INR 749.00 \\u00b7 fixed visit price\", \"badges\": [{\"label\": \"Provider-supplied \\u00b7 not independently verified\", \"variant\": \"warning\"}], \"primary_cta\": {\"label\": \"Review quote\", \"selection\": {\"action\": \"select\", \"quote_id\": \"q_729ba5aa00324d4b\"}}}]}"
+      }
+    }
+  ],
+  "booking_timelines": [
+    {
+      "booking": {
+        "id": "b_af3d56286f864886",
+        "owner": "agent1qf7n5l05x47df60z7kym8llfe04p9q0a6wpkrm07thcn6qrp42fdjendhfc:0442fcd3-0c02-4ff9-9441-a6eaa782de0e",
+        "quote": "q_935b946254fe46dd",
+        "provider": "p1",
+        "slot": "2026-10-14T10:00:00+05:30",
+        "state": "cancelled",
+        "hold_until": 1791880482.479747,
+        "approved": 1,
+        "payment_state": "refunded",
+        "recovery_of": null
+      },
+      "timeline": [
+        {
+          "seq": 2,
+          "at": 1791880343.090875,
+          "entity": "b_af3d56286f864886",
+          "kind": "booking_requested",
+          "actor": "agent1qf7n5l05x47df60z7kym8llfe04p9q0a6wpkrm07thcn6qrp42fdjendhfc:0442fcd3-0c02-4ff9-9441-a6eaa782de0e",
+          "payload": {
+            "job": {
+              "area": "indiranagar",
+              "budget": 100000,
+              "city": "bengaluru",
+              "service": "ac",
+              "slot": "2026-10-14T10:00:00+05:30"
+            }
+          }
+        },
+        {
+          "seq": 3,
+          "at": 1791880343.101345,
+          "entity": "q_935b946254fe46dd",
+          "kind": "quote_created",
+          "actor": "provider:p1",
+          "payload": {
+            "digest": "8fc747f912be47d20308229482904860a62b087c75671341d25794b18c6cac5b",
+            "previous": null,
+            "quote": {
+              "amount": 69900,
+              "availability": {
+                "confidence": "provider-confirmed demo",
+                "expires": 1791880643.101093,
+                "hold_capable": true,
+                "observed_at": 1791880343.101093,
+                "source": "provider-agent:p1"
+              },
+              "cancellation": "Demo: full test-payment reversal before work starts",
+              "currency": "INR",
+              "exclusions": "Parts and additional work require a new quote and approval",
+              "expires": 1791880643.101093,
+              "id": "q_935b946254fe46dd",
+              "kind": "fixed",
+              "name": "CoolCare AC",
+              "owner": "agent1qf7n5l05x47df60z7kym8llfe04p9q0a6wpkrm07thcn6qrp42fdjendhfc:0442fcd3-0c02-4ff9-9441-a6eaa782de0e",
+              "provider": "p1",
+              "scope": "One AC service visit",
+              "slot": "2026-10-14T10:00:00+05:30",
+              "trust": {
+                "checked_at": "2026-10-12T19:33:18.462195+00:00",
+                "eligible": true,
+                "expires": "2027-01-10",
+                "issuer": "Mock Service Registry",
+                "jurisdiction": "IN-demo",
+                "method": "mock_lookup",
+                "policy_version": "IN-demo-v1",
+                "source": "mock-registry://servicesetu",
+                "status": "verified",
+                "type": "demo_skill_certificate",
+                "verifier": "demo-verification-agent"
+              },
+              "version": 1
+            }
+          }
+        },
+        {
+          "seq": 5,
+          "at": 1791880362.479842,
+          "entity": "b_af3d56286f864886",
+          "kind": "slot_held",
+          "actor": "agent1qf7n5l05x47df60z7kym8llfe04p9q0a6wpkrm07thcn6qrp42fdjendhfc:0442fcd3-0c02-4ff9-9441-a6eaa782de0e",
+          "payload": {
+            "hold_until": 1791880482.479841,
+            "quote": "q_935b946254fe46dd",
+            "recovery_of": null
+          }
+        },
+        {
+          "seq": 6,
+          "at": 1791880379.593003,
+          "entity": "b_af3d56286f864886",
+          "kind": "customer_approved",
+          "actor": "agent1qf7n5l05x47df60z7kym8llfe04p9q0a6wpkrm07thcn6qrp42fdjendhfc:0442fcd3-0c02-4ff9-9441-a6eaa782de0e",
+          "payload": {
+            "quote": "q_935b946254fe46dd"
+          }
+        },
+        {
+          "seq": 7,
+          "at": 1791880379.600946,
+          "entity": "b_af3d56286f864886",
+          "kind": "payment_started",
+          "actor": "agent1qf7n5l05x47df60z7kym8llfe04p9q0a6wpkrm07thcn6qrp42fdjendhfc:0442fcd3-0c02-4ff9-9441-a6eaa782de0e",
+          "payload": {
+            "amount": 69900,
+            "payment": "pay_1bd1f850cfd14249",
+            "quote": "q_935b946254fe46dd"
+          }
+        },
+        {
+          "seq": 8,
+          "at": 1791880379.60885,
+          "entity": "b_af3d56286f864886",
+          "kind": "booking_confirmed",
+          "actor": "agent1qf7n5l05x47df60z7kym8llfe04p9q0a6wpkrm07thcn6qrp42fdjendhfc:0442fcd3-0c02-4ff9-9441-a6eaa782de0e",
+          "payload": {
+            "amount": 69900,
+            "payment": "pay_1bd1f850cfd14249",
+            "quote": "q_935b946254fe46dd"
+          }
+        },
+        {
+          "seq": 9,
+          "at": 1791880832.884625,
+          "entity": "b_af3d56286f864886",
+          "kind": "provider_cancelled",
+          "actor": "provider:p1",
+          "payload": {
+            "payment_state": "refunded"
+          }
+        },
+        {
+          "seq": 10,
+          "at": 1791880832.884854,
+          "entity": "b_af3d56286f864886",
+          "kind": "slot_released",
+          "actor": "provider:p1",
+          "payload": {}
+        },
+        {
+          "seq": 12,
+          "at": 1791880832.91576,
+          "entity": "b_af3d56286f864886",
+          "kind": "recovery_proposed",
+          "actor": "agent1qf7n5l05x47df60z7kym8llfe04p9q0a6wpkrm07thcn6qrp42fdjendhfc:0442fcd3-0c02-4ff9-9441-a6eaa782de0e",
+          "payload": {
+            "alternatives": [
+              "p2"
+            ],
+            "requires_approval": true
+          }
+        }
+      ]
+    },
+    {
+      "booking": {
+        "id": "b_66ba6312eaa64f11",
+        "owner": "agent1qf7n5l05x47df60z7kym8llfe04p9q0a6wpkrm07thcn6qrp42fdjendhfc:0442fcd3-0c02-4ff9-9441-a6eaa782de0e",
+        "quote": "q_729ba5aa00324d4b",
+        "provider": "p2",
+        "slot": "2026-10-14T10:00:00+05:30",
+        "state": "cancelled",
+        "hold_until": 1791880976.703701,
+        "approved": 1,
+        "payment_state": "refunded",
+        "recovery_of": "b_af3d56286f864886"
+      },
+      "timeline": [
+        {
+          "seq": 11,
+          "at": 1791880832.906395,
+          "entity": "b_66ba6312eaa64f11",
+          "kind": "booking_requested",
+          "actor": "agent1qf7n5l05x47df60z7kym8llfe04p9q0a6wpkrm07thcn6qrp42fdjendhfc:0442fcd3-0c02-4ff9-9441-a6eaa782de0e",
+          "payload": {
+            "job": {
+              "area": "indiranagar",
+              "budget": 100000,
+              "city": "bengaluru",
+              "service": "ac",
+              "slot": "2026-10-14T10:00:00+05:30"
+            }
+          }
+        },
+        {
+          "seq": 13,
+          "at": 1791880832.922413,
+          "entity": "q_729ba5aa00324d4b",
+          "kind": "quote_created",
+          "actor": "provider:p2",
+          "payload": {
+            "digest": "65ca5f4c4fce4006a1fc326a9ae1d0a1e771a0a17df88b9d62cf04fe1ae7ee2b",
+            "previous": null,
+            "quote": {
+              "amount": 74900,
+              "availability": {
+                "confidence": "provider-confirmed demo",
+                "expires": 1791881132.922066,
+                "hold_capable": true,
+                "observed_at": 1791880832.922066,
+                "source": "provider-agent:p2"
+              },
+              "cancellation": "Demo: full test-payment reversal before work starts",
+              "currency": "INR",
+              "exclusions": "Parts and additional work require a new quote and approval",
+              "expires": 1791881132.9220648,
+              "id": "q_729ba5aa00324d4b",
+              "kind": "fixed",
+              "name": "Breeze AC",
+              "owner": "agent1qf7n5l05x47df60z7kym8llfe04p9q0a6wpkrm07thcn6qrp42fdjendhfc:0442fcd3-0c02-4ff9-9441-a6eaa782de0e",
+              "provider": "p2",
+              "scope": "One AC service visit",
+              "slot": "2026-10-14T10:00:00+05:30",
+              "trust": {
+                "checked_at": "2026-10-12T19:33:18.462195+00:00",
+                "eligible": true,
+                "expires": "2027-01-10",
+                "issuer": "Mock Service Registry",
+                "jurisdiction": "IN-demo",
+                "method": "mock_lookup",
+                "policy_version": "IN-demo-v1",
+                "source": "seeded provider upload",
+                "status": "provider_supplied",
+                "type": "demo_skill_certificate",
+                "verifier": "demo-verification-agent"
+              },
+              "version": 1
+            }
+          }
+        },
+        {
+          "seq": 14,
+          "at": 1791880856.703876,
+          "entity": "b_66ba6312eaa64f11",
+          "kind": "slot_held",
+          "actor": "agent1qf7n5l05x47df60z7kym8llfe04p9q0a6wpkrm07thcn6qrp42fdjendhfc:0442fcd3-0c02-4ff9-9441-a6eaa782de0e",
+          "payload": {
+            "hold_until": 1791880976.703874,
+            "quote": "q_729ba5aa00324d4b",
+            "recovery_of": "b_af3d56286f864886"
+          }
+        },
+        {
+          "seq": 15,
+          "at": 1791880862.5790012,
+          "entity": "b_66ba6312eaa64f11",
+          "kind": "customer_approved",
+          "actor": "agent1qf7n5l05x47df60z7kym8llfe04p9q0a6wpkrm07thcn6qrp42fdjendhfc:0442fcd3-0c02-4ff9-9441-a6eaa782de0e",
+          "payload": {
+            "quote": "q_729ba5aa00324d4b"
+          }
+        },
+        {
+          "seq": 16,
+          "at": 1791880862.587203,
+          "entity": "b_66ba6312eaa64f11",
+          "kind": "payment_started",
+          "actor": "agent1qf7n5l05x47df60z7kym8llfe04p9q0a6wpkrm07thcn6qrp42fdjendhfc:0442fcd3-0c02-4ff9-9441-a6eaa782de0e",
+          "payload": {
+            "amount": 74900,
+            "payment": "pay_87db1016d82544df",
+            "quote": "q_729ba5aa00324d4b"
+          }
+        },
+        {
+          "seq": 17,
+          "at": 1791880862.591118,
+          "entity": "b_66ba6312eaa64f11",
+          "kind": "booking_confirmed",
+          "actor": "agent1qf7n5l05x47df60z7kym8llfe04p9q0a6wpkrm07thcn6qrp42fdjendhfc:0442fcd3-0c02-4ff9-9441-a6eaa782de0e",
+          "payload": {
+            "amount": 74900,
+            "payment": "pay_87db1016d82544df",
+            "quote": "q_729ba5aa00324d4b"
+          }
+        },
+        {
+          "seq": 18,
+          "at": 1791880888.431233,
+          "entity": "b_66ba6312eaa64f11",
+          "kind": "customer_cancelled",
+          "actor": "system:proof_cleanup",
+          "payload": {
+            "payment_state": "refunded"
+          }
+        },
+        {
+          "seq": 19,
+          "at": 1791880888.43137,
+          "entity": "b_66ba6312eaa64f11",
+          "kind": "slot_released",
+          "actor": "system:proof_cleanup",
+          "payload": {}
+        }
+      ]
+    }
+  ],
+  "all_synthetic_slots_released": true,
+  "initial_client_logging_note": "Initial booking is reconstructed from the immutable server timeline; hosted stdout was replaced with structured logger output on the same client identity."
+}

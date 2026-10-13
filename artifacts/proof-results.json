@@ -137,6 +137,14 @@
     {
       "scenario": "test_proofs.Proofs.test_20_provider_reports_actual_slot_capacity",
       "status": "passed"
+    },
+    {
+      "scenario": "test_reasoning.ReasoningSource.test_invalid_model_output_is_identified_as_fallback",
+      "status": "passed"
+    },
+    {
+      "scenario": "test_reasoning.ReasoningSource.test_valid_model_output_records_api_source",
+      "status": "passed"
     }
   ],
   "mesh": "passed"

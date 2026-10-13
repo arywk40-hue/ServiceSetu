@@ -18,6 +18,7 @@ from uagents import Agent,Bureau,Context,Model,Protocol
 from uagents_core.contrib.protocols.chat import ChatMessage,ChatAcknowledgement,chat_protocol_spec
 from uagents_core.contrib.protocols.payment import (RequestPayment,CommitPayment,RejectPayment,CompletePayment,CancelPayment,Funds,payment_protocol_spec)
 from uagents_core.registration import AgentRegistrationPolicy,BatchRegistrationPolicy
+from uagents.registration import BatchAlmanacApiRegistrationPolicy
 
 from .cards import chat_message,booking_status,envelope
 from .core import Store,Rejected
@@ -117,6 +118,8 @@ def create_mesh(store=None,offline=None,reasoner=None,payment_mode=None):
         agent_class=OfflineAgent if offline else Agent
         agents[role]=agent_class(name="ServiceSetu-"+role.replace(":","-"),seed=seed+":"+role,
             mailbox=mailbox,readme_path=str(path),publish_agent_details=not offline,
+            handle="servicesetu" if role=="concierge" else None,
+            metadata={"is_public":True,"categories":["innovationlab","hackathon"]},
             enable_agent_inspector=not offline,handle_messages_concurrently=False,**kwargs)
     addresses={role:agent.address for role,agent in agents.items()}
     concierge=agents["concierge"]
@@ -243,7 +246,7 @@ def create_mesh(store=None,offline=None,reasoner=None,payment_mode=None):
             await asyncio.to_thread(reconcile,services)
 
     port=int(os.getenv("SERVICESETU_PORT","8000"))
-    bureau=Bureau(port=port,registration_policy=NoBatchRegistration() if offline else None)
+    bureau=Bureau(port=port,registration_policy=NoBatchRegistration() if offline else BatchAlmanacApiRegistrationPolicy())
     for agent in agents.values(): bureau.add(agent)
     return bureau,agents,store
 

@@ -1,0 +1,29 @@
+{
+  "verified_at": "2026-10-13T07:51:38.193935+00:00",
+  "test_data": true,
+  "model": "asi1",
+  "source": {
+    "parse": "asi1",
+    "explain": "asi1"
+  },
+  "request": "Book AC servicing in Indiranagar, Bengaluru at 2026-10-14T10:00:00+05:30, maximum budget INR 1000.",
+  "validated_job": {
+    "service": "ac",
+    "city": "bengaluru",
+    "area": "indiranagar",
+    "slot": "2026-10-14T10:00:00+05:30",
+    "budget": 100000
+  },
+  "explanation": "In this fictional ServiceSetu demo, CoolCare AC (\u20b9699.00) undercuts Breeze AC (\u20b9749.00) by \u20b950 for the identical fixed scope \u2014 a single AC service visit, with parts and additional work excluded pending a new quote \u2014 and both hold the same 2026-10-14 10:00 IST slot, whose availability was confirmed only by the provider agents themselves and expires exactly 300 seconds after observation (~2026-10-13 07:51 UTC), so the slots are fresh but perishable and hold-capable per the providers' own claims.\n\nOn trust, CoolCare's demo skill certificate is marked \"verified\" via a mock_lookup against the fictional Mock Service Registry (checked 2026-10-13, valid until 2027-01-11), whereas Breeze's certificate is merely \"provider_supplied\" from a seeded upload and is not independently verified; Lapsed AC (p3) was excluded because its credential expired before the service date \u2014 and no booking, payment, or genuine credential is claimed here, as all providers, registry checks, and provider content are untrusted demo data.",
+  "quotes_compared": [
+    "q_b2106822eaea42d8",
+    "q_a2d40955fa11443c"
+  ],
+  "excluded": [
+    {
+      "provider": "p3",
+      "name": "Lapsed AC",
+      "reason": "Credential expired before the service date"
+    }
+  ]
+}

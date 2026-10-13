@@ -1,13 +1,13 @@
 # ServiceSetu submission workbench
 
-Status: local implementation and synthetic proofs ready; live platform acceptance pending.
+Status: local proofs, all thirteen registrations, live ASI1 adapters and the actual mailbox workflow pass. ASI:One discovery/routing, rendered cards, Stripe test checkout and submission capture remain pending.
 
 ## Links to record after verification
 
 - Public GitHub repo: [arywk40-hue/ServiceSetu](https://github.com/arywk40-hue/ServiceSetu), published and public.
 - ASI:One shared chat: pending full live conversation.
-- Concierge profile: pending registration and fresh-account discovery.
-- Specialist/provider profiles: pending registration (identities in `artifacts/registration-manifest.json`).
+- Concierge profile: [ServiceSetu-concierge](https://agentverse.ai/agents/details/agent1q02ftm6eu39lw0vc5kh3uhr4gtkkeqd6jpcaxzn4gyyrc2ac0p9ecvl39sz/profile), registered and active; fresh-account ASI:One discovery is unverified.
+- Specialist/provider profiles: all thirteen names, addresses and verified URLs are in `artifacts/registration-manifest.json` and the README.
 - Demo video: pending live platform capture.
 
 Do not replace these with invented links or present local dispatch as an ASI:One session.
@@ -15,8 +15,9 @@ Do not replace these with invented links or present local dispatch as an ASI:One
 ## Live acceptance
 
 - [x] Confirm actual event date/rules: [official event](https://www.fetch.ai/events/fetch-a-thon-3), [official hackpack](https://www.fetch.ai/events/hackathons/fetch-a-thon-3/hackpack), checked October 13, 2026.
-- [ ] ASI1 key returns a valid parsed request and evidence-based comparison.
-- [ ] All 13 identities have registered profiles and running mailboxes.
+- [x] ASI1 key returns a valid parsed request and evidence-based comparison (`artifacts/live-asi1-proof.json`).
+- [x] All 13 identities have registered profiles and verified active Almanac entries.
+- [x] Actual hosted client → mailbox → local mesh booking/recovery/audit passes (`artifacts/remote-mailbox-proof.json`).
 - [ ] Only Concierge routes customer conversations; internal agents are described as internal.
 - [ ] A fresh ASI:One account discovers Concierge and completes the full workflow.
 - [ ] Form, shortlist, review and status cards render in the client.
