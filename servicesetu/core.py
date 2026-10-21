@@ -375,9 +375,21 @@ class Store:
             self.event(db,bid,"service_completed",owner)
 
     def timeline(self, owner, bid):
-        b = self.booking(bid,owner)
+        self.booking(bid,owner)
         with self.connect() as db:
-            rows = db.execute("SELECT * FROM events WHERE entity IN (?,?) ORDER BY seq",(bid,b["quote"])).fetchall()
+            # A replacement's audit includes the cancellations that caused it.
+            # UNION terminates cyclic links; ownership is checked at every hop.
+            rows = db.execute("""
+                WITH RECURSIVE chain(id,quote,recovery_of) AS (
+                    SELECT id,quote,recovery_of FROM bookings WHERE id=? AND owner=?
+                    UNION
+                    SELECT b.id,b.quote,b.recovery_of FROM bookings b
+                    JOIN chain c ON b.id=c.recovery_of WHERE b.owner=?
+                )
+                SELECT DISTINCT e.* FROM events e
+                JOIN chain c ON e.entity=c.id OR e.entity=c.quote
+                ORDER BY e.seq
+            """,(bid,owner,owner)).fetchall()
         return [dict(r, payload=json.loads(r["payload"])) for r in rows]
 
     def session(self, sid):

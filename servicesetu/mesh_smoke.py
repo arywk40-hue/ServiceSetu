@@ -71,6 +71,7 @@ async def smoke():
                         await ctx.send(target,chat_message(envelope("show what happened")))
                 elif text.startswith("Immutable timeline"):
                     assert "customer_approved" in text and "booking_confirmed" in text and "recovery_of" in text
+                    assert "provider_cancelled" in text and text.count("booking_confirmed") == 2
                     steps.append("audit")
                     if not finished.done(): finished.set_result({"status":"passed","transport":"actual uAgent local dispatcher", "steps":steps,"transcript":transcript})
                 else:
