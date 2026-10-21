@@ -140,10 +140,12 @@ class Conversation:
                 state.pop("approval_token",None)
                 self.store.save_session(owner,state)
                 return cards.booking_status(b,self.store.get_quote(b["quote"],owner))
-            if low in ("show what happened","audit","timeline"):
+            if low in ("show what happened","audit","timeline","audit details"):
                 if not state.get("booking"): raise Rejected("No booking yet; choose a provider first")
                 result=await bus.call("booking","timeline",owner,booking=state["booking"])
-                return cards.envelope("Immutable timeline (test data):\n"+"\n".join(f"#{e['seq']} {e['kind']} · {json.dumps(e['payload'],sort_keys=True)}" for e in result["events"]))
+                if low == "audit details":
+                    return cards.envelope("Immutable timeline (test data):\n"+"\n".join(f"#{e['seq']} {e['kind']} · {json.dumps(e['payload'],sort_keys=True)}" for e in result["events"]))
+                return cards.booking_history(result["events"], self.store.booking(state["booking"],owner))
             if low in ("status","booking status"):
                 if not state.get("booking"): raise Rejected("No booking yet")
                 b=await bus.call("booking","status",owner,booking=state["booking"])

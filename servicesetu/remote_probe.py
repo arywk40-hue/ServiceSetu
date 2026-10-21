@@ -80,8 +80,11 @@ async def response(ctx:Context,sender:str,msg:ChatMessage):
                 ctx.storage.set("replacement",booking)
                 ctx.storage.set("phase","audit")
                 await say(ctx,"show what happened")
-        elif phase=="audit" and text.startswith("Immutable timeline"):
-            assert "customer_approved" in text and "booking_confirmed" in text and "recovery_of" in text
+        elif phase=="audit" and text.startswith(("Booking history","Immutable timeline")):
+            if text.startswith("Booking history"):
+                assert "You approved the exact quote" in text and "Replacement booking confirmed" in text and "Provider cancelled" in text
+            else:
+                assert "customer_approved" in text and "booking_confirmed" in text and "recovery_of" in text
             ctx.storage.set("phase","complete")
             record(ctx,"complete",replacement=ctx.storage.get("replacement"))
         else:
