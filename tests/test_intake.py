@@ -3,6 +3,7 @@ import asyncio
 import json
 import tempfile
 import sqlite3
+from contextlib import closing
 import unittest
 from datetime import datetime,timezone
 from pathlib import Path
@@ -113,7 +114,7 @@ class Intake(unittest.TestCase):
     def test_existing_booking_database_migrates_without_losing_evidence(self):
         path=Path(self.tmp.name)/"legacy.db"
         old=SCHEMA.replace("'requested',","").replace("quote TEXT REFERENCES","quote TEXT NOT NULL REFERENCES").replace("provider TEXT, slot TEXT","provider TEXT NOT NULL, slot TEXT NOT NULL")
-        with sqlite3.connect(path) as db:
+        with closing(sqlite3.connect(path)) as db, db:
             db.executescript(old)
             db.execute("INSERT INTO quotes VALUES(?,?,?,?,?,?,?,?,?,?)",("q_legacy","p1",self.slot,"alice",1,69900,self.clock()+300,encode({"snapshot":"legacy accepted scope"}),"legacy-digest",None))
             db.execute("INSERT INTO bookings(id,owner,quote,provider,slot,state,hold_until,approved,payment_state) VALUES(?,?,?,?,?,'confirmed',?,1,'paid')",("b_legacy","alice","q_legacy","p1",self.slot,self.clock()+120))

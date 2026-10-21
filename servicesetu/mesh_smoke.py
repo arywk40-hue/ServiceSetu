@@ -91,7 +91,7 @@ async def smoke():
             result=await asyncio.wait_for(finished,timeout=45)
             Path("artifacts").mkdir(exist_ok=True)
             Path("artifacts/mesh-proof.json").write_text(json.dumps(result,indent=2))
-            print("PASS real uAgent message flow:"," → ".join(result["steps"]))
+            print("PASS real uAgent message flow:"," -> ".join(result["steps"]))
             return result
         finally:
             pending=[t for t in asyncio.all_tasks() if t is not asyncio.current_task()]

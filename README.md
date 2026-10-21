@@ -23,6 +23,8 @@ python3 -m servicesetu chat
 
 ## Run the actual Fetch.ai mesh
 
+Windows PowerShell setup and existing-identity startup: [Windows guide](docs/windows.md).
+
 ```sh
 uv venv .venv
 uv pip install --python .venv/bin/python -e '.[fetch]'

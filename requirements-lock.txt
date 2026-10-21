@@ -49,6 +49,7 @@ stripe==14.4.1
 tqdm==4.70.1
 typing-extensions==4.16.0
 typing-inspection==0.4.4
+tzdata==2026.5; sys_platform == 'win32'
 uagents==0.25.5
 uagents-core==0.4.11
 urllib3==2.8.0
