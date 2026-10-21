@@ -7,7 +7,7 @@ import unittest
 from datetime import datetime,timezone
 from pathlib import Path
 from servicesetu.core import Store,Rejected,SCHEMA,encode
-from servicesetu.conversation import Conversation,selection
+from servicesetu.conversation import Conversation,selection,strip_recipient
 from servicesetu.service import Services,LocalBus
 from servicesetu.reasoning import Reasoner
 from tests.test_proofs import Clock
@@ -51,6 +51,33 @@ class Intake(unittest.TestCase):
     def test_planner_form_selection(self):
         text=f"The user submitted action search with service ac, area Indiranagar, slot {self.slot}, budget_rupees 1000."
         self.assertEqual(selection(text),{"action":"search","service":"ac","area":"indiranagar","slot":self.slot,"budget_rupees":"1000"})
+
+    def test_direct_card_routing_preserves_approval_binding(self):
+        async def scenario():
+            reasoner=Reasoner();reasoner.key=None
+            conv=Conversation(self.store,reasoner);bus=LocalBus(Services(self.store,payment_mode="mock"))
+            owner="alice:direct-chat";address="agent1demo_concierge"
+            search=json.dumps(dict(self.job,action="search",budget_rupees=1000))
+            await conv.handle(owner,"@servicesetu "+search,bus)
+            qid=self.store.session(owner)["quotes"][0]
+            routed="@"+address+" "+json.dumps({"selection":{"action":"select","quote_id":qid}})
+            review=await conv.handle(owner,strip_recipient(routed,address),bus)
+            self.assertEqual(review["metadata"]["card_kind"],"review")
+            approval=json.loads(review["metadata"]["card_payload"])["approve_cta"]["selection"]
+            wrong=dict(approval,approval_token="at_"+"0"*32)
+            denied=await conv.handle(owner,"@servicesetu "+json.dumps({"selection":wrong}),bus)
+            self.assertIn("Approval must match",denied["text"])
+            self.assertEqual(self.store.booking(approval["booking_id"],owner)["state"],"held")
+            result=await conv.handle(owner,"@servicesetu "+json.dumps({"selection":approval}),bus)
+            self.assertIn(": confirmed.",result["text"])
+            with self.store.connect() as db:
+                self.assertEqual(db.execute("SELECT count(*) FROM payments").fetchone()[0],1)
+        asyncio.run(scenario())
+
+    def test_only_concierge_recipient_is_removed(self):
+        raw='@someone_else {"action":"approve"}'
+        self.assertEqual(strip_recipient(raw,"agent1demo"),raw)
+        self.assertEqual(selection('@servicesetu do not approve b_'+'1'*16+' q_'+'2'*16+' at_'+'3'*32),{})
 
     def test_old_reject_card_cannot_cancel_current_hold(self):
         async def scenario():

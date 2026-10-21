@@ -23,7 +23,7 @@ from uagents.registration import BatchAlmanacApiRegistrationPolicy
 from .cards import chat_message,booking_status,envelope
 from .core import Store,Rejected
 from .service import Services
-from .conversation import Conversation
+from .conversation import Conversation,strip_recipient
 
 
 class Work(Model):
@@ -154,7 +154,7 @@ def create_mesh(store=None,offline=None,reasoner=None,payment_mode=None):
     async def on_chat(ctx:Context,sender:str,msg:ChatMessage):
         await ctx.send(sender,ChatAcknowledgement(timestamp=datetime.now(timezone.utc),acknowledged_msg_id=msg.msg_id))
         owner=sender+":"+str(ctx.session)
-        text="\n".join(c.text for c in msg.content if c.type=="text")
+        text=strip_recipient("\n".join(c.text for c in msg.content if c.type=="text"),concierge.address)
         bus=MeshBus(ctx,addresses)
         try:
             reply=await conversation.handle(owner,text,bus)

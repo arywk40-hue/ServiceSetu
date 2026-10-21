@@ -7,10 +7,23 @@ from . import cards
 from .reasoning import Reasoner,rupees
 
 
+def strip_recipient(text, address=None):
+    """Remove only this Concierge's routing mention, never arbitrary prose."""
+    text=text.strip()
+    match=re.match(r"@([^\s]+)\s+",text)
+    if match and match.group(1) in {"servicesetu",address}:
+        return text[match.end():].strip()
+    return text
+
+
 def selection(text):
+    text=strip_recipient(text)
     try:
         obj=json.loads(text)
-        if isinstance(obj,dict): return obj
+        if isinstance(obj,dict):
+            if "action" in obj: return obj
+            if isinstance(obj.get("selection"),dict): return obj["selection"]
+            return obj
     except (ValueError,TypeError): pass
     # Consequential prose is narrow and requires all review-card identifiers.
     # Reject negations, conditionals and hypothetical instructions.
@@ -76,7 +89,7 @@ class Conversation:
         return cards.shortlist(quotes,excluded,explanation,recovery=bool(recovery_of))
 
     async def handle(self,owner,text,bus):
-        text=text.strip()
+        text=strip_recipient(text)
         state=self.store.session(owner)
         picked=selection(text)
         action=picked.get("action")

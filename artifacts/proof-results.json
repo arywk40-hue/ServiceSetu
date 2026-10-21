@@ -3,6 +3,10 @@
   "passed": true,
   "scenarios": [
     {
+      "scenario": "test_intake.Intake.test_direct_card_routing_preserves_approval_binding",
+      "status": "passed"
+    },
+    {
       "scenario": "test_intake.Intake.test_equivalent_timezone_slots_normalize",
       "status": "passed"
     },
@@ -16,6 +20,10 @@
     },
     {
       "scenario": "test_intake.Intake.test_old_reject_card_cannot_cancel_current_hold",
+      "status": "passed"
+    },
+    {
+      "scenario": "test_intake.Intake.test_only_concierge_recipient_is_removed",
       "status": "passed"
     },
     {
