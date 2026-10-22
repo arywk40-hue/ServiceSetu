@@ -7,7 +7,7 @@ Public hackathon repository: [arywk40-hue/ServiceSetu](https://github.com/arywk4
 
 Book a trusted local service, approve the exact price, and recover when the provider cancels — through one ASI:One conversation. ServiceSetu coordinates independent provider agents and keeps bookings and payments in deterministic code.
 
-**Prototype only:** six fictional providers in Indiranagar, Bengaluru; AC servicing and plumbing; mock credential registry; simulated or Stripe **test** payments. No actual service, identity verification, real money, UPI integration, escrow or payout. “Verified” always refers to the mock registry. Provider-supplied documents are explicitly unverified.
+**Prototype only:** six fictional providers by default, twelve in the expanded demo; Indiranagar, Bengaluru; AC servicing, plumbing, one-bathroom cleaning and electrical inspection; mock credential registry; simulated or Stripe **test** payments. No actual service, identity verification, real money, UPI integration, escrow or payout. “Verified” always refers to the mock registry. Provider-supplied documents are explicitly unverified.
 
 ## Start in 30 seconds, no keys required
 
@@ -40,7 +40,9 @@ Seeded slots are tomorrow at 10:00 and 14:00 **Asia/Kolkata**, computed when a n
 
 ## Agents
 
-There are **eight role types and thirteen agent instances**: seven specialists and six provider agents. Only Concierge is a customer chat entry point. The rest accept signed typed requests from Concierge.
+For a fresh multi-day demo database, run `python -m servicesetu seed-demo --db data/demo-three-days.db --days 3`, then start the runtime with `SERVICESETU_DB` pointing to that file. This creates 10 AM and 2 PM appointments for each of the next three local dates. Existing files are refused rather than overwritten, and normal startup preserves their seeded slots. Credentials and agent identities remain unchanged.
+
+There are **eight role types**: seven specialists and one provider role type. The default demo has thirteen agent instances (six providers); the expanded demo has nineteen (twelve providers). Only Concierge is a customer chat entry point. The rest accept signed typed requests from Concierge.
 
 | Name | Role | Instance/address |
 | --- | --- | --- |
@@ -108,6 +110,10 @@ To demonstrate a stale hold, wait more than two minutes before approving. To ret
 
 ## Payment modes
 
+For normal-language requests, missing-detail clarification and explicit
+appointment alternatives, see [service intake](docs/intake.md). Customers can
+choose appointment cards or reply `option 1`; no ISO timestamp is required.
+
 `PAYMENT_MODE=mock` simulates the charge inside the conversation and clearly labels it simulated. It never presents a fake Stripe transaction as real gateway verification.
 
 `PAYMENT_MODE=stripe_test` requires `sk_test_` and `pk_test_` keys. Payment Agent creates an embedded Stripe test Checkout session only after quote-bound approval. Concierge sends `RequestPayment` with Stripe metadata as the seller proxy for the single customer chat address. `CommitPayment` is forwarded to Payment Agent for server-side checks of the stored session ID, customer, booking, amount, currency, recipient and `livemode=false` before confirmation. The Trust Monitor polls persisted sessions every 30 seconds to recover a missing commit. Late payment is reversed if the short hold expired; gateway errors retain a pending intent for reconciliation. Refund failures remain explicitly `refund_required` for human review.
@@ -126,6 +132,11 @@ The provider can cancel only its own booking. It sends a signed notice to Concie
 
 ## Proofs
 
+Routine reports and identity manifests are saved to ignored `artifacts/local/`.
+Files directly under `artifacts/` remain published evidence snapshots. Registration
+checks read local manifests first and do not rewrite the README unless evidence
+publication is explicitly selected. See [generated evidence](docs/evidence.md).
+
 One full command: `.venv/bin/python -m servicesetu prove`.
 
 | Brief claim | Automated evidence |
@@ -142,7 +153,7 @@ One full command: `.venv/bin/python -m servicesetu prove`.
 | 10. Reconstruct booking history | `test_11`, actual mesh audit |
 | 11. Restricted actions gated | `test_12`, `test_13`, `test_17`, `test_18` |
 
-The suite contains **49 scenarios**, including seven gateway boundary checks using a Stripe SDK double, nine intake/card/lifecycle checks, three recovery-history checks, eight customer-history display checks, and reasoning-source checks that distinguish ASI1 from an offline fallback. Those checks prove binding and failure behavior locally; they do not claim a real test gateway transaction. Evidence is written to `artifacts/proof-results.json`, `artifacts/mesh-proof.json`, and `artifacts/demo-transcript.json`. All use synthetic customer data. SQLite transactions and a unique active-slot index own reservation; quotes and events reject updates/deletes. File owners can still alter the database directly: append-only application audit is not cryptographic tamper-proof evidence. Shared SQLite is for a **single-machine Bureau**, not independently hosted Agentverse containers.
+The suite contains **109 scenarios**, including seven gateway boundary checks using a Stripe SDK double, nine intake/card/lifecycle checks, three recovery-history checks, eight customer-history display checks, five evidence-output checks, thirteen availability/intake checks, eight customer-language checks, twelve location-correction checks, five multi-day demo checks, and reasoning-source checks that distinguish ASI1 from an offline fallback. Those checks prove binding and failure behavior locally; they do not claim a real test gateway transaction. Evidence is written to `artifacts/proof-results.json`, `artifacts/mesh-proof.json`, and `artifacts/demo-transcript.json`. All use synthetic customer data. SQLite transactions and a unique active-slot index own reservation; quotes and events reject updates/deletes. File owners can still alter the database directly: append-only application audit is not cryptographic tamper-proof evidence. Shared SQLite is for a **single-machine Bureau**, not independently hosted Agentverse containers.
 
 Two live integration checks have also passed:
 
@@ -169,3 +180,5 @@ No production Indian registry integration, legal assessment, real customer onboa
 - [ACP interactive cards](https://docs.agentverse.ai/documentation/advanced-usages/agent-driven-interactive-cards) and [predefined card schemas](https://docs.agentverse.ai/documentation/advanced-usages/predefined-card-schemas).
 - [Fetch.ai embedded Stripe example](https://github.com/fetchai/innovation-lab-examples/tree/main/stripe-horoscope-agent), consulted for metadata shape; implementation here is original.
 - [ASI:One](https://asi1.ai), [Agentverse](https://agentverse.ai), [Stripe test dashboard](https://dashboard.stripe.com/test/apikeys).
+
+Service catalogue and expansion readiness, including expanded demo setup, package boundaries and reasoning deadlines, are described in [service expansion](docs/service-expansion.md).

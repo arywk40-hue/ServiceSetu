@@ -7,6 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from .evidence import evidence_path
 from .core import Store
 from .conversation import Conversation
 from .service import Services,LocalBus
@@ -43,8 +44,8 @@ async def demo():
         await say(json.dumps(json.loads(reply["metadata"]["card_payload"])["approve_cta"]["selection"]))
         await say("show what happened")
         Path("artifacts").mkdir(exist_ok=True)
-        Path("artifacts/demo-transcript.json").write_text(json.dumps({"test_data":True,"transcript":transcript,"role_calls":bus.calls},indent=2))
-        print("\nSaved artifacts/demo-transcript.json")
+        evidence_path("demo-transcript.json").write_text(json.dumps({"test_data":True,"transcript":transcript,"role_calls":bus.calls},indent=2))
+        print("\nSaved", evidence_path("demo-transcript.json"))
 
 
 async def chat():
@@ -77,21 +78,36 @@ def prove(include_mesh=True):
         report={"test_data":True,"passed":result.wasSuccessful(),"scenarios":result.records,"mesh":"not_run"}
         if result.wasSuccessful() and include_mesh and importlib.util.find_spec("uagents"):
             from .mesh_smoke import smoke
-            asyncio.run(smoke())
+            for service in ("ac","cleaning","electrical"):
+                asyncio.run(smoke(service))
             report["mesh"]="passed"
         elif result.wasSuccessful() and include_mesh:
             print("Mesh proof not run: install the fetch extras and use .venv/bin/python.")
         Path("artifacts").mkdir(exist_ok=True)
-        Path("artifacts/proof-results.json").write_text(json.dumps(report,indent=2))
+        evidence_path("proof-results.json").write_text(json.dumps(report,indent=2))
         if not result.wasSuccessful(): raise SystemExit(1)
 
 
 def main():
     parser=argparse.ArgumentParser(description="ServiceSetu seeded booking prototype")
-    parser.add_argument("command",choices=["prove","demo","chat","mesh","prepare"])
+    parser.add_argument("command",choices=["prove","demo","chat","mesh","prepare","seed-demo"])
     parser.add_argument("--core-only",action="store_true")
+    parser.add_argument("--db",help="New database path for seed-demo; existing files are never overwritten")
+    parser.add_argument("--days",type=int,choices=range(1,15),help="Days of demo appointments, starting tomorrow; default 3 (seed-demo only)")
+    parser.add_argument("--expanded",action="store_true",help="Include bathroom cleaning and electrical inspection providers in a NEW demo database")
     args=parser.parse_args()
-    if args.command=="prove": prove(not args.core_only)
+    if args.command!="seed-demo" and (args.db is not None or args.days is not None or args.expanded):
+        parser.error("--db, --days and --expanded are only supported with seed-demo; use SERVICESETU_DB for the runtime")
+    if args.command=="seed-demo":
+        if not args.db: parser.error("seed-demo requires --db with a new database path")
+        path=Path(args.db)
+        if path.exists(): parser.error("Database already exists; choose a new path to preserve saved bookings")
+        store=Store(path)
+        store.seed(days=args.days or 3,expanded=args.expanded)
+        print("Created fictional demo appointments in",path)
+        for slot in store.provider("p1")["slots"]: print(slot)
+        print("Existing databases, credentials and agent identities were not changed.")
+    elif args.command=="prove": prove(not args.core_only)
     elif args.command=="demo": asyncio.run(demo())
     elif args.command=="chat": asyncio.run(chat())
     elif args.command=="mesh":

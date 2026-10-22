@@ -10,6 +10,20 @@ from tests.test_proofs import Clock
 
 
 class ReasoningSource(unittest.TestCase):
+    def test_follow_up_budget_context_is_sent_in_rupees_not_paise(self):
+        captured = {}
+        class Client:
+            def __init__(self,**kwargs): self.chat=SimpleNamespace(completions=self)
+            async def create(self,**kwargs):
+                captured.update(json.loads(kwargs["messages"][-1]["content"]))
+                return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content='{"area":"Indiranagar"}'))])
+            async def close(self): pass
+        reasoner=Reasoner(); reasoner.key="synthetic-key"
+        with patch.dict(sys.modules,{"openai":SimpleNamespace(AsyncOpenAI=Client)}):
+            asyncio.run(reasoner.parse("Indiranagar",Clock()(),{"budget":100000}))
+        self.assertEqual(captured["known_request"]["budget_rupees"],"1000")
+        self.assertNotIn("budget",captured["known_request"])
+
     def test_invalid_model_output_is_identified_as_fallback(self):
         class Client:
             def __init__(self,**kwargs):self.chat=SimpleNamespace(completions=self)

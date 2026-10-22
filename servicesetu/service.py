@@ -11,6 +11,8 @@ class Services:
 
     def execute(self,role,action,owner,data):
         s=self.store
+        if role=="matching" and action=="availability":
+            return {"options":s.available_slots(data["job"])}
         if role=="matching" and action=="match":
             choices,excluded=s.match(data["job"])
             return {"providers":[p["id"] for p in choices],"excluded":excluded}

@@ -6,6 +6,7 @@ data/
 .agent*
 *.db*
 artifacts/private/
+artifacts/local/
 *.egg-info/
 .ruff_cache/
 *.log

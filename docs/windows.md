@@ -15,6 +15,17 @@ the project installation includes it automatically.
 
 ## Use existing registered identities
 
+For several consecutive demo days, create a new database once:
+
+```powershell
+.\.venv\Scripts\python.exe -m servicesetu seed-demo --db data/demo-three-days.db --days 3
+$env:SERVICESETU_DB = 'data/demo-three-days.db'
+```
+
+Use that database path when starting the mesh instead of the date-specific
+example below. Seed creation refuses existing files and never edits the seed or
+credentials. Slots stay fixed after creation; this is not a rolling calendar.
+
 Put the owner's private `.env` beside `pyproject.toml`. Preserve
 `SERVICESETU_SEED`; if it is blank, obtain the original private `data/agent-seed`
 file. Do not run `prepare`, the mesh, or its proof with a missing original seed

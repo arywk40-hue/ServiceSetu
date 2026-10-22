@@ -13,6 +13,7 @@ from datetime import datetime,timezone
 from pathlib import Path
 import requests
 from dotenv import load_dotenv
+from .evidence import evidence_path, evidence_input
 from .core import Store
 from .payments import Payments
 
@@ -120,7 +121,7 @@ def main():
     if not key:raise SystemExit("Configure AGENTVERSE_API_KEY")
     headers={"Authorization":"Bearer "+key,"Content-Type":"application/json"}
     store=Store(os.getenv("SERVICESETU_DB","data/servicesetu.db"));store.seed()
-    addresses=json.loads(Path("artifacts/agent-addresses.json").read_text())
+    addresses=json.loads(evidence_input("agent-addresses.json").read_text())
     PRIVATE_STATE.parent.mkdir(exist_ok=True)
     def call(method,path="",**kwargs):
         response=requests.request(method,HOSTING+path,headers=headers,timeout=30,**kwargs)
@@ -210,7 +211,7 @@ def main():
     evidence["booking_timelines"]=[{"booking":dict(b),"timeline":store.timeline(b["owner"],b["id"])} for b in records]
     evidence["all_synthetic_slots_released"]=all(b["state"]=="cancelled" for b in records)
     raw=re.sub(r"at_[a-f0-9]{32}","[redacted approval token]",json.dumps(evidence,indent=2))
-    Path("artifacts/remote-mailbox-proof.json").write_text(raw)
+    evidence_path("remote-mailbox-proof.json").write_text(raw)
     print(terminal.upper()+" remote mailbox flow; temporary hosted client removed",flush=True)
     if terminal!="passed":raise SystemExit(1)
 

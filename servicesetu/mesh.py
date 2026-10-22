@@ -1,4 +1,4 @@
-"""13 actual uAgents: seven specialists plus six provider identities.
+"""Seven specialist uAgents plus one identity per configured provider.
 
 Eight role types including providers. Bureau shares SQLite on one machine.
 Only Concierge exposes ACP. Concierge proxies the human-facing seller protocol
@@ -21,6 +21,7 @@ from uagents_core.registration import AgentRegistrationPolicy,BatchRegistrationP
 from uagents.registration import BatchAlmanacApiRegistrationPolicy
 
 from .cards import chat_message,booking_status,envelope
+from .evidence import evidence_path
 from .core import Store,Rejected
 from .service import Services
 from .conversation import Conversation,strip_recipient
@@ -95,7 +96,7 @@ def profile(role):
     return (f"# ServiceSetu {role}\n\n"
         "![tag:innovationlab](https://img.shields.io/badge/innovationlab-3D8BD3)\n"
         "![tag:hackathon](https://img.shields.io/badge/hackathon-5F43F1)\n\n"
-        +("Book a fictional AC servicing or plumbing visit in Indiranagar, Bengaluru. Compare provider agents, see honest trust labels, approve one quote, receive a test booking, and recover from provider cancellation. Try: AC service in Indiranagar Bengaluru tomorrow 10am under INR 1000. Ask show what happened for an audit timeline. " if customer else
+        +("Book a fictional AC servicing, plumbing, one-bathroom cleaning or electrical inspection visit in Indiranagar, Bengaluru. Provider availability depends on the active demo database. Compare provider agents, see honest trust labels, approve one quote, receive a test booking, and recover from provider cancellation. Try: AC service in Indiranagar Bengaluru tomorrow 10am under INR 1000. Ask show services for packages or show what happened for an audit timeline. " if customer else
           f"Internal ServiceSetu {role} specialist. Not a customer chat entry point. Accepts typed Work messages only from the Concierge. ")
         +"Providers, credentials and registry are seeded test data. Payment is simulated or Stripe test mode; no real service or money. Discretionary refunds, payouts and verification overrides require human review.\n")
 
@@ -279,8 +280,8 @@ def main():
     load_dotenv()
     bureau,agents,_=create_mesh()
     Path("artifacts").mkdir(exist_ok=True)
-    Path("artifacts/agent-addresses.json").write_text(json.dumps({role:agent.address for role,agent in agents.items()},indent=2))
-    print("ServiceSetu: 13 agents / 8 role types · seeded test data ·",os.getenv("PAYMENT_MODE","mock"))
+    evidence_path("agent-addresses.json").write_text(json.dumps({role:agent.address for role,agent in agents.items()},indent=2))
+    print(f"ServiceSetu: {len(agents)} agents / 8 role types · seeded test data ·",os.getenv("PAYMENT_MODE","mock"))
     print("Concierge:",agents["concierge"].address)
     bureau.run()
 

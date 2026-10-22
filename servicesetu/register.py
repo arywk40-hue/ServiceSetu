@@ -9,12 +9,14 @@ from datetime import datetime,timezone
 from uagents_core.config import AgentverseConfig
 from uagents_core.types import AgentMetadata
 from uagents_core.utils.registration import (register_agent,RegistrationRequestCredentials,AgentverseRegistrationRequest,AgentverseRequestError)
+from .evidence import evidence_path, evidence_input, publishing_evidence
 from .mesh import create_mesh,seed_phrase,profile
 
 
 def write_manifest(manifest):
     Path("artifacts").mkdir(exist_ok=True)
-    Path("artifacts/registration-manifest.json").write_text(json.dumps(manifest,indent=2))
+    evidence_path("registration-manifest.json").write_text(json.dumps(manifest,indent=2))
+    if not publishing_evidence(): return
     readme=Path("README.md")
     if not readme.exists(): return
     start="<!-- generated-agent-addresses:start -->";end="<!-- generated-agent-addresses:end -->"
@@ -68,7 +70,7 @@ def prepare():
         if old is None: os.environ.pop("SERVICESETU_MAILBOX",None)
         else: os.environ["SERVICESETU_MAILBOX"]=old
     config=AgentverseConfig()
-    manifest_path=Path("artifacts/registration-manifest.json")
+    manifest_path=evidence_input("registration-manifest.json")
     previous={}
     if manifest_path.exists():
         try: previous={entry["address"]:entry for entry in json.loads(manifest_path.read_text())}
@@ -82,9 +84,9 @@ def prepare():
         entry.update({k:prior[k] for k in ("profile_url","verified_at","handle") if k in prior})
         manifest.append(entry)
     Path("artifacts").mkdir(exist_ok=True)
-    Path("artifacts/agent-addresses.json").write_text(json.dumps({r["role"]:r["address"] for r in manifest},indent=2))
+    evidence_path("agent-addresses.json").write_text(json.dumps({r["role"]:r["address"] for r in manifest},indent=2))
     write_manifest(manifest)
-    print("Prepared 13 seed-derived identities. This does not register agents.")
+    print(f"Prepared {len(manifest)} seed-derived identities. This does not register agents.")
     return manifest
 
 
@@ -121,10 +123,10 @@ def main():
             print("Registered:",entry["name"],entry["address"])
         except AgentverseRequestError as error:
             entry["registration_status"]="failed"
-            Path("artifacts/registration-manifest.json").write_text(json.dumps(manifest,indent=2))
+            evidence_path("registration-manifest.json").write_text(json.dumps(manifest,indent=2))
             # Do not print raw gateway/auth exceptions; private run logs can be inspected.
             raise SystemExit(f"Registration failed for {entry['name']} ({type(error).__name__}); earlier registrations are preserved. Retry with the same seed.")
-    Path("artifacts/registration-manifest.json").write_text(json.dumps(manifest,indent=2))
+    evidence_path("registration-manifest.json").write_text(json.dumps(manifest,indent=2))
     print("Now set SERVICESETU_MAILBOX=true and run python -m servicesetu mesh. Live ASI:One discovery still needs testing.")
 
 

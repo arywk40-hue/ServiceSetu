@@ -6,6 +6,7 @@ import tempfile
 from pathlib import Path
 from datetime import datetime,timezone
 from dotenv import load_dotenv
+from .evidence import evidence_path
 from .core import Store
 from .reasoning import Reasoner
 
@@ -30,7 +31,7 @@ async def verify():
                   "request":request,"validated_job":job,"explanation":explanation,
                   "quotes_compared":[q["id"] for q in quotes],"excluded":excluded}
         Path("artifacts").mkdir(exist_ok=True)
-        Path("artifacts/live-asi1-proof.json").write_text(json.dumps(evidence,indent=2))
+        evidence_path("live-asi1-proof.json").write_text(json.dumps(evidence,indent=2))
         print("PASS live ASI1 intake and provider comparison;",len(quotes),"seeded provider quotes compared")
 
 

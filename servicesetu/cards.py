@@ -1,8 +1,10 @@
 """Documented ACP card payloads with usable text fallbacks."""
 import json
+import re
 from datetime import datetime, timezone
 from uuid import uuid4
 from zoneinfo import ZoneInfo
+from .catalogue import SERVICES
 
 
 def envelope(text, kind=None, payload=None, terminal=False):
@@ -25,36 +27,95 @@ def chat_message(reply):
 
 
 def job_form(default_slot):
-    return envelope("ServiceSetu demo uses fictional providers and test payments. I need the service, area, appointment and maximum budget. Demo slots are tomorrow at 10:00 or 14:00 IST.","form",{
+    return envelope("ServiceSetu demo uses fictional providers and test payments. Tell me the service, area, preferred day and time, and maximum budget in normal language, or use this form. Availability will be checked for your requested date.","form",{
         "title":"Find a local service · test data", "fields":[
-            {"name":"service","kind":"select","label":"Service","required":True,"options":[{"value":"ac","label":"AC servicing"},{"value":"plumbing","label":"Plumbing"}]},
+            {"name":"service","kind":"select","label":"Service package","required":True,"options":[{"value":key,"label":item.get("package",item["label"])} for key,item in SERVICES.items() if item["bookable"]]},
             {"name":"area","kind":"text","label":"Area (Indiranagar)","required":True},
-            {"name":"slot","kind":"text","label":f"Appointment ISO date, e.g. {default_slot}","required":True},
+            {"name":"slot","kind":"text","label":"Preferred day and time (e.g. tomorrow at 10 AM)","required":True},
             {"name":"budget_rupees","kind":"number","label":"Maximum budget (INR)","required":True}],
         "submit_cta":{"label":"Find providers","selection":{"action":"search"}}})
 
 
-def shortlist(quotes, excluded, explanation="", recovery=False):
-    lines = ["Recovery alternatives — your replacement needs approval." if recovery else "Provider-confirmed demo quotes:"]
+def appointment_label(slot):
+    return datetime.fromisoformat(slot).astimezone(ZoneInfo("Asia/Kolkata")).strftime("%d %B %Y, %I:%M %p IST")
+
+
+def clarification(partial):
+    missing = []
+    if not partial.get("service"):
+        missing.append("which service you need (AC servicing, plumbing, one-bathroom cleaning or electrical inspection)")
+    if not partial.get("area") or not partial.get("city"):
+        missing.append("your area and city" if not partial.get("area") and not partial.get("city")
+                       else "your area" if not partial.get("area") else "your city")
+    if not partial.get("slot"):
+        missing.append("your preferred day and time, such as 'tomorrow at 10 AM'")
+    if partial.get("budget") is None:
+        missing.append("your maximum budget in INR")
+    return envelope("I need a few more details:\n" + "\n".join("- " + field for field in missing)
+                    + "\nYou can reply in normal language. This demo covers Indiranagar, Bengaluru only.")
+
+
+def availability_choices(job, options, excluded, token):
+    requested = appointment_label(job["slot"])
+    lines = [f"No eligible provider is available for {requested} within INR {job['budget']/100:.2f}."]
+    if not options:
+        lines.append("No other eligible appointments are currently available within your budget. You can make a new request with a different time or budget.")
+        if excluded:
+            lines.append("Why not: " + "; ".join(f"{p['name']}: {p['reason']}" for p in excluded))
+        return envelope("\n".join(lines))
+    lines.extend(["These other appointments fit your service, location and budget:",
+                  "Choose a card or reply 'option 1', 'option 2', and so on. Nothing has been reserved or paid."])
     items = []
-    for q in quotes:
+    for index, option in enumerate(options, start=1):
+        label = appointment_label(option["slot"])
+        price = f"From INR {option['from_amount']/100:.2f}"
+        lines.append(f"{index}. {label} — {price}")
+        items.append({"id":str(index), "title":label, "secondary_text":price,
+                      "primary_cta":{"label":"See providers", "selection":{"action":"choose_time", "option":index,"availability_token":token}}})
+    lines.append("Availability will be checked again after you choose. A provider quote still needs review and approval.")
+    return envelope("\n".join(lines), "carousel", {"title":"Choose another appointment", "items":items})
+
+
+def acknowledge(reply, user_text):
+    text=user_text.lower().replace("’", "'")
+    if re.search(r"\b(?:i'm|i am|i feel|this is|it's)\s+(?:(?:really|so|very)\s+)?(?:frustrat\w*|stress\w*|worried|worrying|overwhelm\w*)\b",text):
+        return dict(reply,text="That sounds difficult. I can help you check service options.\n\n"+reply["text"])
+    return reply
+
+
+def document_label(trust):
+    return ("Checked against a fictional mock registry — demo only"
+            if trust["status"]=="verified" else "Provider-supplied — not independently verified")
+
+
+def shortlist(quotes, excluded, explanation="", recovery=False):
+    lines = ["Recovery alternatives — your replacement needs approval." if recovery else "Provider-confirmed demo quotes:",
+             "Fictional providers and test payments only."]
+    if explanation and len(quotes)>1: lines.extend(["", explanation])
+    items = []
+    for number,q in enumerate(quotes,start=1):
         trust=q["trust"]
-        label="Verified · mock registry" if trust["status"]=="verified" else "Provider-supplied · not independently verified"
-        lines.append(f"{q['id']}: {q['name']}, INR {q['amount']/100:.2f}, {q['slot']}; {label}; source {trust['source']}; checked {trust['checked_at']}. Reply select {q['id']}.")
-        items.append({"id":q["id"],"title":q["name"],"subtitle":q["slot"],"secondary_text":f"INR {q['amount']/100:.2f} · fixed visit price",
+        label=document_label(trust)
+        lines.extend(["",f"### {number}. {q['name']} — INR {q['amount']/100:.2f}",
+                      f"**Appointment:** {appointment_label(q['slot'])}",f"**Documents:** {label}",
+                      f"**Includes:** {q['scope']}",f"**Not included:** {q['exclusions']}"])
+        items.append({"id":q["id"],"title":q["name"],"subtitle":appointment_label(q["slot"]),"secondary_text":f"INR {q['amount']/100:.2f} · fixed visit price",
             "badges":[{"label":label,"variant":"success" if trust["status"]=="verified" else "warning"}],
             "primary_cta":{"label":"Review quote","selection":{"action":"select","quote_id":q["id"]}}})
-    if explanation: lines.append(explanation)
-    if excluded: lines.append("Why not: "+"; ".join(f"{p['name']}: {p['reason']}" for p in excluded))
+    if excluded:
+        lines.extend(["", "### Other providers"])
+        lines.extend(f"- **{p['name']}:** {p['reason']}" for p in excluded)
+    lines.extend(["", "**Next:** Choose a provider card or reply 'option 1', 'option 2', and so on.",
+                  "This opens the quote review. Payment requires your separate approval."])
     return envelope("\n".join(lines),"carousel",{"title":"Choose a replacement" if recovery else "Choose a provider", "subtitle":"Seeded demo · INR · slot freshness checked again at approval", "items":items})
 
 
 def review(q,b,nonce):
     selection={"booking_id":b["id"],"quote_id":q["id"],"approval_token":nonce}
-    rows=[("Provider",q["name"]),("Appointment",q["slot"]),("Fixed total",f"INR {q['amount']/100:.2f}"),
-          ("Scope",q["scope"]),("Excluded",q["exclusions"]),("Documents",q["trust"]["status"]+" · "+q["trust"]["source"]),
-          ("Checked",q["trust"]["checked_at"]),("Cancellation",q["cancellation"]),("Payment","Test mode only"),
-          ("Quote version",str(q["version"])),("Hold expires",datetime.fromtimestamp(b["hold_until"],timezone.utc).isoformat())]
+    rows=[("Provider",q["name"]),("Appointment",appointment_label(q["slot"])),("Fixed total",f"INR {q['amount']/100:.2f}"),
+          ("Scope",q["scope"]),("Excluded",q["exclusions"]),("Documents",document_label(q["trust"])),
+          ("Checked",appointment_label(q["trust"]["checked_at"])),("Cancellation",q["cancellation"]),("Payment","Test mode only"),
+          ("Quote version",str(q["version"])),("Hold expires",datetime.fromtimestamp(b["hold_until"],ZoneInfo("Asia/Kolkata")).strftime("%d %B %Y, %I:%M:%S %p IST"))]
     text="Review before approving:\n"+"\n".join(f"{k}: {v}" for k,v in rows)
     text+=f"\nTo approve this exact test booking, click Approve or reply: approve {b['id']} {q['id']} {nonce}"
     return envelope(text,"review",{"title":"Approve this test booking", "summary_rows":[{"label":k,"value":v} for k,v in rows],
@@ -63,9 +124,12 @@ def review(q,b,nonce):
 
 
 def booking_status(b,q):
-    text=f"Booking {b['id']}: {b['state']}. {q['name']}, {q['slot']}, INR {q['amount']/100:.2f}. Payment: {b['payment_state']} (test mode). Ask 'show what happened' for the audit timeline."
+    text=(f"Booking status: {b['state']}.\n\n**Provider:** {q['name']}\n"
+          f"**Appointment:** {appointment_label(q['slot'])}\n**Total:** INR {q['amount']/100:.2f}\n"
+          f"**Test payment:** {b['payment_state'].replace('_',' ')}\n\n"
+          f"Booking reference: {b['id']}\nSend 'show what happened' for the history.")
     return envelope(text,"detail",{"title":f"Booking {b['state']} · test mode", "summary_rows":[
-        {"label":"Booking","value":b["id"]},{"label":"Provider","value":q["name"]},{"label":"Appointment","value":q["slot"]},{"label":"Payment","value":b["payment_state"]}],"ctas":[]},terminal=True)
+        {"label":"Booking","value":b["id"]},{"label":"Provider","value":q["name"]},{"label":"Appointment","value":appointment_label(q["slot"])},{"label":"Test payment","value":b["payment_state"].replace('_',' ')}],"ctas":[]},terminal=True)
 
 
 def booking_history(events, booking=None):

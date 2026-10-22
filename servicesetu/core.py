@@ -10,6 +10,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
 from zoneinfo import ZoneInfo
+from .locations import canonical
+from .catalogue import SERVICES,unavailable_message
 
 
 class Rejected(ValueError):
@@ -131,20 +133,26 @@ class Store:
                 return p
         raise Rejected("Unknown provider")
 
-    def seed(self):
-        """Six fictional providers, dates relative to initialization, mock registry."""
+    def seed(self, days=1, expanded=False):
+        """Six default or twelve expanded fictional providers; mock registry."""
+        if not isinstance(days,int) or isinstance(days,bool) or not 1<=days<=14:
+            raise Rejected("Demo days must be a whole number from 1 to 14")
         now = datetime.fromtimestamp(self.clock(), timezone.utc)
-        tomorrow = (now.astimezone(ZoneInfo("Asia/Kolkata")) + timedelta(days=1)).date().isoformat()
+        dates=[(now.astimezone(ZoneInfo("Asia/Kolkata"))+timedelta(days=offset)).date().isoformat()
+               for offset in range(1,days+1)]
         names = ["CoolCare AC", "Breeze AC", "Lapsed AC", "FlowFix Plumbing", "TapCare Plumbing", "Renewal Plumbing"]
+        if expanded:
+            names += ["FreshNest Cleaning", "SparkleSpace Cleaning", "Lapsed Cleaning",
+                      "CircuitCheck Electrical", "BrightWire Electrical", "Lapsed Electrical"]
         for i, name in enumerate(names):
-            service = "ac" if i < 3 else "plumbing"
-            expiry = (now + timedelta(days=-1 if i == 2 else 1 if i == 5 else 90)).date().isoformat()
+            service = ("ac","plumbing","cleaning","electrical")[i//3]
+            expiry = (now + timedelta(days=-1 if i in (2,8,11) else 1 if i == 5 else 90)).date().isoformat()
             p = {"id": f"p{i+1}", "name": name, "service": service, "city": "bengaluru",
-                 "area": "indiranagar", "amount": [69900, 74900, 59900, 49900, 54900, 45900][i],
-                 "slots": [f"{tomorrow}T10:00:00+05:30", f"{tomorrow}T14:00:00+05:30"],
+                 "area": "indiranagar", "amount": [69900, 74900, 59900, 49900, 54900, 45900,79900,89900,59900,39900,49900,29900][i],
+                 "slots": [f"{day}T{hour}:00:00+05:30" for day in dates for hour in ("10","14")],
                  "credential": {"type": "demo_skill_certificate", "jurisdiction": "IN-demo",
-                  "issuer": "Mock Service Registry", "status": "provider_supplied" if i in (1,4) else "verified",
-                  "source": "seeded provider upload" if i in (1,4) else "mock-registry://servicesetu",
+                  "issuer": "Mock Service Registry", "status": "provider_supplied" if i%3==1 else "verified",
+                  "source": "seeded provider upload" if i%3==1 else "mock-registry://servicesetu",
                   "checked_at": now.isoformat(), "expires": expiry, "method": "mock_lookup",
                   "verifier": "demo-verification-agent", "policy_version": "IN-demo-v1"},
                  "available": True}
@@ -166,13 +174,17 @@ class Store:
 
     def normalize_job(self,job):
         if not isinstance(job,dict): raise Rejected("A structured service request is required")
-        if job.get("service") not in ("ac","plumbing"):
-            raise Rejected("Demo supports AC servicing and plumbing only")
+        if not isinstance(job.get("service"),str) or job["service"] not in SERVICES or not SERVICES[job["service"]]["bookable"]:
+            raise Rejected(unavailable_message(job.get("service")))
+        package=SERVICES[job["service"]].get("package")
+        if package and job.get("package")!=package:
+            raise Rejected("Confirm the service package: "+package)
         city=job.get("city","bengaluru")
         area=job.get("area","")
         if not isinstance(city,str) or not isinstance(area,str):
             raise Rejected("City and area must be text")
-        if city.lower()!="bengaluru" or area.lower()!="indiranagar":
+        city,area=canonical(city,"city"),canonical(area,"area")
+        if city!="bengaluru" or area!="indiranagar":
             raise Rejected("Demo covers Indiranagar, Bengaluru only")
         try:
             dt=datetime.fromisoformat(job["slot"])
@@ -181,7 +193,7 @@ class Store:
             if not isinstance(budget,int) or isinstance(budget,bool) or budget<=0: raise ValueError
         except (ValueError,TypeError,KeyError,OverflowError):
             raise Rejected("Provide a future timezone-qualified slot and a positive whole-paise budget") from None
-        return {"service":job["service"],"city":city.lower(),"area":area.lower(),
+        return {"service":job["service"],**({"package":package} if package else {}),"city":city.lower(),"area":area.lower(),
                 "slot":dt.astimezone(ZoneInfo("Asia/Kolkata")).isoformat(timespec="seconds"),"budget":budget}
 
     def match(self, job):
@@ -201,6 +213,22 @@ class Store:
             else: selected.append(dict(p, trust=trust))
         selected.sort(key=lambda p: (p["trust"]["status"] != "verified", p["amount"]))
         return selected, excluded
+
+    def available_slots(self, job, limit=4):
+        """Read-only suggestions; never change a request or reserve capacity."""
+        job = self.normalize_job(job)
+        slots = {slot for p in self.providers() if p["service"] == job["service"] for slot in p["slots"]}
+        options = []
+        for slot in sorted(slots, key=lambda value: datetime.fromisoformat(value).timestamp()):
+            if slot == job["slot"] or datetime.fromisoformat(slot).timestamp() <= self.clock():
+                continue
+            choices, _ = self.match(dict(job, slot=slot))
+            if choices:
+                options.append({"slot": slot, "from_amount": min(p["amount"] for p in choices),
+                                "provider_count": len(choices)})
+            if len(options) >= limit:
+                break
+        return options
 
     def quote(self, owner, provider, slot, previous=None):
         p = self.provider(provider)
@@ -223,8 +251,8 @@ class Store:
                 version = old["version"] + 1
             payload = {"id": qid, "provider": provider, "name": p["name"], "slot": slot,
                 "owner": owner, "version": version, "amount": p["amount"], "currency": "INR",
-                "kind": "fixed", "scope": "One AC service visit" if p["service"] == "ac" else "One standard tap repair visit",
-                "exclusions": "Parts and additional work require a new quote and approval",
+                "kind": "fixed", "scope": SERVICES[p["service"]]["scope"],
+                "exclusions": SERVICES[p["service"]]["exclusions"],
                 "cancellation": "Demo: full test-payment reversal before work starts",
                 "trust": self.trust(p, slot), "expires": self.clock()+300,
                 "availability": {"source": f"provider-agent:{provider}", "observed_at": self.clock(),

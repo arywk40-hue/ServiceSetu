@@ -6,21 +6,25 @@ import tempfile
 import os
 import secrets
 from pathlib import Path
+from datetime import datetime,timedelta
 
 from uagents import Agent,Context
 from uagents_core.contrib.protocols.chat import ChatMessage,ChatAcknowledgement
 
 from .cards import chat_message,envelope
+from .evidence import evidence_path
 from .core import Store
 from .mesh import create_mesh,NoRegistration,OfflineAgent,CancelControl
 from .reasoning import Reasoner
 from .service import Services
+from .catalogue import SERVICES
 
 
-async def smoke():
+async def smoke(service="ac"):
     with tempfile.TemporaryDirectory() as tmp:
         reasoner=Reasoner();reasoner.key=None
         store=Store(Path(tmp)/"mesh.db")
+        store.seed(expanded=service in ("cleaning","electrical"))
         bureau,agents,store=create_mesh(store,offline=True,reasoner=reasoner,payment_mode="mock")
         probe=OfflineAgent(name="ServiceSetu-Smoke-Customer",seed="servicesetu-public-smoke-customer",registration_policy=NoRegistration(),enable_agent_inspector=False,publish_agent_details=False)
         finished=asyncio.get_running_loop().create_future()
@@ -41,7 +45,10 @@ async def smoke():
                 payload=json.loads(meta.get("card_payload","{}"))
                 kind=meta.get("card_kind")
                 if kind=="carousel":
-                    steps.append("recovery_shortlist" if state["replacement"] else "shortlist")
+                    if payload.get("title")=="Choose another appointment":
+                        steps.append("availability_choices")
+                    else:
+                        steps.append("recovery_shortlist" if state["replacement"] else "shortlist")
                     await ctx.send(target,chat_message(envelope(json.dumps(payload["items"][0]["primary_cta"]["selection"]))))
                 elif kind=="review":
                     steps.append("replacement_approval" if state["replacement"] else "approval")
@@ -53,8 +60,9 @@ async def smoke():
                     if not state["replacement"]:
                         state["booking"]=saved["booking"]
                         state["replacement"]=True
-                        provider=agents["provider:p1"]
-                        handler=provider._rest_handlers[("POST","/demo/cancel/p1")]
+                        pid=store.booking(saved["booking"],owner)["provider"]
+                        provider=agents["provider:"+pid]
+                        handler=provider._rest_handlers[("POST","/demo/cancel/"+pid)]
                         token=secrets.token_hex(32)
                         prior=os.environ.get("DEMO_CONTROL_TOKEN")
                         os.environ["DEMO_CONTROL_TOKEN"]=token
@@ -81,8 +89,10 @@ async def smoke():
 
         @probe.on_event("startup")
         async def start(ctx:Context):
-            slot=store.provider("p1")["slots"][0]
-            await ctx.send(target,chat_message(envelope("AC service in Indiranagar Bengaluru "+slot+" under INR 1000")))
+            slot=next(p for p in store.providers() if p["service"]==service)["slots"][0]
+            slot=(datetime.fromisoformat(slot)+timedelta(days=1)).isoformat()
+            package=SERVICES[service].get("package",SERVICES[service]["label"])
+            await ctx.send(target,chat_message(envelope(package+" in Indiranagar Bengaluru "+slot+" under INR 1000")))
 
         bureau.add(probe)
         # Agent.setup runs actual handlers and queues; no HTTP listener needed.
@@ -91,8 +101,8 @@ async def smoke():
         try:
             result=await asyncio.wait_for(finished,timeout=45)
             Path("artifacts").mkdir(exist_ok=True)
-            Path("artifacts/mesh-proof.json").write_text(json.dumps(result,indent=2))
-            print("PASS real uAgent message flow:"," -> ".join(result["steps"]))
+            evidence_path("mesh-proof.json" if service=="ac" else "mesh-proof-"+service+".json").write_text(json.dumps(result,indent=2))
+            print(f"PASS real uAgent message flow ({service}):"," -> ".join(result["steps"]))
             return result
         finally:
             pending=[t for t in asyncio.all_tasks() if t is not asyncio.current_task()]

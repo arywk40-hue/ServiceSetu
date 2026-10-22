@@ -5,6 +5,8 @@ import secrets
 from .core import Rejected
 from . import cards
 from .reasoning import Reasoner,rupees
+from .locations import clean_context,resolve,location_only
+from .catalogue import SERVICES,catalogue_text,unavailable_message,package_from_text
 
 
 def strip_recipient(text, address=None):
@@ -40,7 +42,7 @@ def selection(text):
         return {"action":"select","quote_id":q.group()}
     if low=="reject": return {"action":"reject"}
     if re.search(r"\bsearch\b",low) and "budget_rupees" in low:
-        service=re.search(r"\bservice\s*(?:(?:is|=|:)\s*)?[\"']?(ac|plumbing)\b",low)
+        service=re.search(r"\bservice\s*(?:(?:is|=|:)\s*)?[\"']?(ac|plumbing|cleaning|electrical)\b",low)
         area=re.search(r"\barea\s*(?:(?:is|=|:)\s*)?[\"']?(indiranagar)\b",low)
         slot=re.search(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?(?:[+-]\d{2}:\d{2}|Z)",text)
         budget=re.search(r"\bbudget_rupees\s*[\"']?\s*(?:(?:is|=|:)\s*)?(\d+(?:\.\d{1,2})?)",low)
@@ -53,6 +55,22 @@ class Conversation:
     def __init__(self,store,reasoner=None):
         self.store=store
         self.reasoner=reasoner or Reasoner()
+
+    def location_check(self, owner, state, partial, text=""):
+        partial, proposal, unsupported = resolve(partial,text)
+        state["partial_job"]=partial
+        state.pop("availability_options",None)
+        state.pop("availability_token",None)
+        state.pop("pending_location",None)
+        if proposal: state["pending_location"]=proposal
+        self.store.save_session(owner,state)
+        if proposal:
+            labels={"area":"Indiranagar","city":"Bengaluru"}
+            place=", ".join(labels[field] for field in ("area","city") if field in proposal)
+            return partial,cards.envelope(f"Did you mean {place}? Reply yes to confirm the location, or tell me the correct area and city. This confirms only your location, not a booking or payment.")
+        if unsupported:
+            return partial,cards.envelope("This demo serves Indiranagar in Bengaluru only. Please tell me your area and city again. I have kept the other request details; no new booking was made.")
+        return partial,None
 
     async def quotes(self,bus,owner,job,recovery_of=None):
         job=self.store.normalize_job(job)
@@ -81,10 +99,19 @@ class Conversation:
         quotes.sort(key=lambda q:(q["trust"]["status"]!="verified",q["amount"]))
         state=self.store.session(owner)
         state.update(job=job,quotes=[q["id"] for q in quotes],recovery_of=recovery_of,intent=intent["id"])
+        state.pop("availability_options",None)
+        state.pop("availability_token",None)
         state.pop("approval_token",None)
         state.pop("partial_job",None)
         self.store.save_session(owner,state)
-        if not quotes: return cards.envelope("No eligible provider fits your slot and budget. "+"; ".join(f"{e['name']}: {e['reason']}" for e in excluded)+". Try tomorrow 10am/2pm or raise the budget.")
+        if not quotes:
+            if recovery_of:
+                return cards.envelope("No eligible replacement fits the original appointment and budget. Nothing has been booked. To change the appointment or budget, start a new service request.")
+            available=await bus.call("matching","availability",owner,job=job)
+            state["availability_options"]=available["options"]
+            state["availability_token"]="av_"+secrets.token_hex(16)
+            self.store.save_session(owner,state)
+            return cards.availability_choices(job,available["options"],excluded,state["availability_token"])
         explanation=await self.reasoner.explain(quotes,excluded)
         return cards.shortlist(quotes,excluded,explanation,recovery=bool(recovery_of))
 
@@ -95,11 +122,42 @@ class Conversation:
         action=picked.get("action")
         low=text.lower()
         try:
+            if low.strip(" ?.! ") in ("services","what services do you offer","available services","show services"):
+                return cards.envelope(catalogue_text(self.store.providers()))
+            option_match=re.fullmatch(r"(?:option\s+)?([1-4])",low)
+            if not action and option_match and state.get("availability_options"):
+                picked={"action":"choose_time","option":int(option_match.group(1)),"availability_token":state.get("availability_token")}
+                action="choose_time"
+            elif not action and option_match and state.get("quotes"):
+                index=int(option_match.group(1))-1
+                if index>=len(state["quotes"]): raise Rejected("Choose a provider from the current shortlist")
+                picked={"action":"select","quote_id":state["quotes"][index]}
+                action="select"
+            if action=="choose_time":
+                index=picked.get("option")
+                options=state.get("availability_options",[])
+                if not state.get("availability_token") or picked.get("availability_token")!=state["availability_token"]:
+                    raise Rejected("This appointment card is no longer current; use the latest options")
+                if not isinstance(index,int) or isinstance(index,bool) or not 1<=index<=len(options):
+                    raise Rejected("Choose an appointment from the current options")
+                job=dict(state["job"],slot=options[index-1]["slot"])
+                return await self.quotes(bus,owner,job)
             if action=="search":
+                job={"service":str(picked.get("service","")).strip().casefold(),"area":picked.get("area",""),"city":picked.get("city","bengaluru"),
+                     "slot":picked.get("slot"),"budget":rupees(picked.get("budget_rupees"))}
+                # The form labels explicitly name each bounded service package.
+                package=SERVICES.get(job["service"],{}).get("package")
+                if package: job["package"]=package
+                if isinstance(job["slot"],str) and not re.match(r"^\d{4}-\d{2}-\d{2}T",job["slot"]):
+                    parsed=await self.reasoner.parse(job["slot"],self.store.clock())
+                    job["slot"]=parsed.get("slot")
+                    if parsed.get("requested_day"): job["requested_day"]=parsed["requested_day"]
+                job,location_reply=self.location_check(owner,state,job)
+                if location_reply: return location_reply
+                if not job.get("slot"): return cards.clarification(job)
+                job=self.store.normalize_job(job)
                 if state.get("booking") and self.store.booking(state["booking"],owner)["state"]=="held":
                     await bus.call("payment","cancel",owner,booking=state["booking"])
-                job={"service":picked.get("service"),"area":str(picked.get("area","")).lower(),"city":"bengaluru",
-                     "slot":picked.get("slot"),"budget":rupees(picked.get("budget_rupees"))}
                 return await self.quotes(bus,owner,job)
             if action=="select":
                 qid=picked.get("quote_id")
@@ -162,18 +220,44 @@ class Conversation:
             if low in ("help","hi","hello","what can you do",""):
                 return cards.job_form(self.store.providers()[0]["slots"][0])
             # Parsing is permitted only for intake. Model output cannot authorize payment.
-            job=await self.reasoner.parse(text,self.store.clock())
-            partial=state.get("partial_job",{})
+            partial=clean_context(state.get("partial_job",{}))
+            confirmation=re.sub(r"[,.!]+"," ",low).strip()
+            confirmation=" ".join(confirmation.split())
+            if state.get("pending_location") and confirmation in ("yes","yes please","correct","that's right","yes that's right","yes correct","yes that's correct"):
+                job=dict(state["pending_location"])
+            elif state.get("pending_location") and confirmation in ("no","no thanks","incorrect"):
+                state.pop("pending_location",None)
+                state["partial_job"]=partial
+                self.store.save_session(owner,state)
+                return cards.envelope("Please tell me the correct area and city. This demo currently serves Indiranagar in Bengaluru only. Your other request details are retained.")
+            else:
+                job=await self.reasoner.parse(text,self.store.clock(),partial)
+                if location_only(text):
+                    job={field:job.get(field) for field in ("city","area")}
+            if job.get("requested_day") and not job.get("slot") and partial.get("slot") and partial["slot"][:10]!=job["requested_day"]:
+                partial.pop("slot",None)
             partial.update({k:v for k,v in job.items() if v is not None})
-            if partial.get("service") and partial["service"] not in ("ac","plumbing"):
-                raise Rejected("Demo supports AC servicing and plumbing only")
-            state["partial_job"]=partial
-            self.store.save_session(owner,state)
+            if isinstance(partial.get("service"),str): partial["service"]=partial["service"].strip().casefold()
+            if partial.get("service") and (not isinstance(partial["service"],str) or not SERVICES.get(partial["service"],{}).get("bookable")):
+                raise Rejected(unavailable_message(partial["service"]))
+            definition=SERVICES.get(partial.get("service"),{})
+            package=definition.get("package")
+            if package:
+                # Only explicit customer package wording is sufficient, never a model guess.
+                chosen=package_from_text(partial["service"],text)
+                previous=state.get("partial_job",{})
+                partial["package"]=chosen or (previous.get("package") if previous.get("service")==partial["service"] else None)
+                if partial["package"]!=package:
+                    state["partial_job"]=partial
+                    self.store.save_session(owner,state)
+                    return cards.envelope(f"The available demo package is **{package}**.\n\nIncludes: {definition['scope']}.\n\nExcluded: {definition['exclusions']}.\n\nIf this fits your request, reply '{package}'. This chooses the package only; provider selection and payment approval come later.")
+            partial,location_reply=self.location_check(owner,state,partial,text)
+            if location_reply: return location_reply
             if not all(partial.get(k) is not None for k in ("service","city","area","slot","budget")):
-                return cards.job_form(self.store.providers()[0]["slots"][0])
+                return cards.acknowledge(cards.clarification(partial),text)
             if state.get("booking") and self.store.booking(state["booking"],owner)["state"]=="held":
                 await bus.call("payment","cancel",owner,booking=state["booking"])
-            return await self.quotes(bus,owner,partial)
+            return cards.acknowledge(await self.quotes(bus,owner,partial),text)
         except (Rejected,TimeoutError) as exc:
             self.store.denied(state.get("booking",owner),str(exc),owner)
             return cards.envelope(str(exc)+". No new booking was confirmed. Ask for fresh providers or human review.")
