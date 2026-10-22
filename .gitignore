@@ -5,6 +5,7 @@ __pycache__/
 data/
 .agent*
 *.db*
+*.message-key
 artifacts/private/
 artifacts/local/
 *.egg-info/

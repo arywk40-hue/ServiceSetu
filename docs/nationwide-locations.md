@@ -35,15 +35,15 @@ Coverage is enforced during matching, alternative-slot searches, quote creation,
 
 An accepted location with no covered provider receives a coverage-unavailable response. Providers from another locality are not offered as substitutes. No booking or payment is made.
 
-## Service address before approval
+## Optional service address
 
-After selecting a provider, the customer enters house/flat, building and street details; a landmark is optional. A structured form and a plain-text reply are supported. Use fictional addresses in the demo. The address is not parsed by the reasoning model and is not added to provider shortlist/explanation requests.
+After selecting a provider, the customer can choose Add address or Skip for now. Skipping still permits normal review, approval and booking. Address entry accepts house/flat, building and street details; a landmark is optional. A structured form and a plain-text reply are supported. Use fictional addresses in the demo. The address is not parsed by the reasoning model and is not added to provider shortlist/explanation requests.
 
-The address is collected before the short slot hold begins. Quote expiry and provider availability are rechecked on submission. The review shows the service area, entered address and exact price before approval. New conversation quotes require a saved address before approval/payment. Previously persisted legacy quotes/bookings remain readable.
+The address is collected before the short slot hold begins. Quote expiry and provider availability are rechecked on submission. The review shows the service area, entered address and exact price before approval. A skipped address is recorded as deferred and does not block approval/payment. The confirmed booking offers Add address so it can be supplied later, without another charge or a change to the approved service area. Previously persisted legacy quotes/bookings remain readable.
 
 The entered line is stored with the quote's city/locality/PIN snapshot in an append-only booking event. It is shown in booking status and customer history. This is customer-supplied data, not a verified address; the application does not geocode it, validate its real-world existence or check locality claims within the street text. The customer must review it.
 
-`change address` before approval releases the current hold and requires a new review and approval token. A stale address form or approval cannot apply to a newer selection. Confirmed bookings require a new request to change address. Replacements reuse the original recorded address; the backend rejects a different address for that recovery. Older bookings without an address collect one on replacement selection.
+`change address` before approval releases the current hold and requires a new review and approval token. A stale address form or approval cannot apply to a newer selection. Confirmed bookings without an address can receive their first address through the owner-bound Add address form. Existing saved addresses still require a new request to change the service location. Replacements reuse the original recorded address; the backend rejects a different address for that recovery. Replacements without an original recorded address can also skip address entry. Replacements with an existing address retain that address.
 
 Addresses are stored in the configured local database and travel through the existing customer chat and booking-agent transport. Database files remain ignored by Git. They are not encrypted by this change. Production deployment still needs a retention/deletion policy and appropriate access controls. No phone number or contact identity is collected in this step.
 

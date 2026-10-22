@@ -30,6 +30,10 @@ async def demo():
         async def say(text):
             reply=await conversation.handle(owner,text,bus)
             payload=json.loads(reply.get('metadata',{}).get('card_payload','{}'))
+            choice=next((item['selection'] for item in payload.get('ctas',[]) if item.get('selection',{}).get('action')=='open_quote_address'),None)
+            if choice:
+                reply=await conversation.handle(owner,json.dumps(choice),bus)
+                payload=json.loads(reply['metadata']['card_payload'])
             address_action=payload.get('submit_cta',{}).get('selection',{})
             if address_action.get('action')=='set_address':
                 transcript.append({'customer':text,'agent':reply})
@@ -99,7 +103,9 @@ def prove(include_mesh=True):
 
 def main():
     parser=argparse.ArgumentParser(description="ServiceSetu seeded booking prototype")
-    parser.add_argument("command",choices=["prove","demo","chat","mesh","prepare","seed-demo"])
+    parser.add_argument("command",choices=["prove","demo","chat","mesh","prepare","seed-demo","provider-inbox"])
+    parser.add_argument('--provider',help='Provider identity for the local authenticated inbox, for example p1')
+    parser.add_argument('--port',type=int,default=8765,help='Loopback provider inbox port (default 8765)')
     parser.add_argument("--core-only",action="store_true")
     parser.add_argument("--db",help="New database path for seed-demo; existing files are never overwritten")
     parser.add_argument("--days",type=int,choices=range(1,15),help="Days of demo appointments, starting tomorrow; default 3 (seed-demo only)")
@@ -109,9 +115,16 @@ def main():
     parser.add_argument('--nationwide-demo',action='store_true',help='Opt into fictional Bengaluru/Mumbai branches in a new twelve-package demo copy')
     parser.add_argument("--from-db",help="Copy an existing demo with SQLite backup before adding the full catalogue; original remains unchanged")
     args=parser.parse_args()
+    if args.command!='provider-inbox' and (args.provider is not None or args.port!=8765):parser.error('Provider and port options are only for provider-inbox')
     if args.command!="seed-demo" and (args.db is not None or args.days is not None or args.expanded or args.full_catalogue or args.extended_catalogue or args.nationwide_demo or args.from_db):
         parser.error("Demo seed options are only supported with seed-demo; use SERVICESETU_DB for the runtime")
-    if args.command=="seed-demo":
+    if args.command=='provider-inbox':
+        if not args.provider or not 1024<=args.port<=65535:parser.error('provider-inbox requires --provider and a port between 1024 and 65535')
+        inbox_db=os.getenv('SERVICESETU_DB','data/servicesetu.db')
+        if not Path(inbox_db).is_file():parser.error('Choose an existing booking database with SERVICESETU_DB before opening the inbox')
+        from .provider_inbox import run
+        run(Store(inbox_db),args.provider,args.port)
+    elif args.command=="seed-demo":
         if not args.db: parser.error("seed-demo requires --db with a new database path")
         path=Path(args.db)
         if path.exists(): parser.error("Database already exists; choose a new path to preserve saved bookings")

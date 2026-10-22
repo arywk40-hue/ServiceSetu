@@ -357,7 +357,7 @@ class Store:
         if maximum is not None and any(value is not None and value>maximum for value in (budget,amount)):
             raise Rejected('A replacement must stay within the original requested budget')
 
-    def hold(self, owner, qid, recovery_of=None, request_id=None, address=None):
+    def hold(self, owner, qid, recovery_of=None, request_id=None, address=None, defer_address=False):
         bid = request_id or ident("b")
         with self.tx() as db:
             self.expire(db)
@@ -367,7 +367,8 @@ class Store:
             p = self.provider(q["provider"])
             location=json.loads(q['payload']).get('location',{'city':p['city'],'area':p['area']})
             saved_address=None
-            if address is not None or json.loads(q['payload']).get('address_required'):
+            if type(defer_address) is not bool or (defer_address and address is not None):raise Rejected('Choose an address or skip it for now')
+            if address is not None or (json.loads(q['payload']).get('address_required') and not defer_address):
                 try:saved_address=validate_address(address,location)
                 except ValueError as exc:raise Rejected(str(exc)) from None
                 if recovery_of:
@@ -381,6 +382,8 @@ class Store:
             if recovery_of:
                 old = db.execute("SELECT * FROM bookings WHERE id=? AND owner=? AND state='cancelled'", (recovery_of,owner)).fetchone()
                 if not old: raise Rejected("Recovery must reference your cancelled booking")
+                original=self.booking(recovery_of,owner).get('service_address')
+                if original and saved_address!=original:raise Rejected('A replacement must keep the original service address')
                 payload=json.loads(q['payload'])
                 self.validate_recovery(owner,recovery_of,q['slot'],quoted_service,payload.get('details',{}),location,amount=q['amount'])
             existing = db.execute("SELECT id FROM bookings WHERE owner=? AND quote=? AND state='held'", (owner,qid)).fetchone()
@@ -402,7 +405,29 @@ class Store:
                 raise Rejected("Slot already reserved; choose a fresh alternative") from None
             self.event(db, bid, "slot_held", owner, quote=qid, hold_until=min(q["expires"],self.clock()+120), recovery_of=recovery_of)
             if saved_address:self.event(db,bid,'service_address_recorded',owner,address=saved_address)
+            elif defer_address:self.event(db,bid,'service_address_deferred',owner)
         return self.booking(bid,owner)
+
+    def provide_address(self,owner,bid,address):
+        with self.tx() as db:
+            b=db.execute('SELECT * FROM bookings WHERE id=? AND owner=?',(bid,owner)).fetchone()
+            if not b or b['state'] not in ('held','confirmed'):raise Rejected('Add an address only to your active booking')
+            if b['state']=='held' and b['approved']:raise Rejected('Finish the pending payment before adding your address')
+            q=self.get_quote(b['quote'],owner)
+            try:value=validate_address(address,q['location'])
+            except ValueError as exc:raise Rejected(str(exc)) from None
+            original=self.booking(bid,owner).get('service_address')
+            if original:
+                if original==value:return self.booking(bid,owner)
+                raise Rejected('An address is already saved; start a new request to change a confirmed service location')
+            if b['recovery_of']:
+                prior=self.booking(b['recovery_of'],owner).get('service_address')
+                if prior and value!=prior:raise Rejected('A replacement keeps the original service address')
+            self.event(db,bid,'service_address_recorded',owner,address=value)
+        return self.booking(bid,owner)
+
+    def address_deferred(self,bid):
+        with self.connect() as db:return bool(db.execute("SELECT 1 FROM events WHERE entity=? AND kind='service_address_deferred'",(bid,)).fetchone())
 
     def booking(self, bid, owner):
         with self.connect() as db:
@@ -418,7 +443,7 @@ class Store:
         with self.tx() as db:
             b = db.execute("SELECT * FROM bookings WHERE id=? AND owner=?", (bid,owner)).fetchone()
             if not b or b["quote"] != qid: raise Rejected("Approval does not match the held quote")
-            if self.get_quote(qid,owner).get('address_required') and not self.booking(bid,owner).get('service_address'):
+            if self.get_quote(qid,owner).get('address_required') and not self.booking(bid,owner).get('service_address') and not self.address_deferred(bid):
                 raise Rejected('A service address is required before approval')
             if b["state"] != "held" or b["hold_until"] <= self.clock(): raise Rejected("Hold expired; refresh before approving")
             db.execute("UPDATE bookings SET approved=1 WHERE id=?", (bid,))
@@ -428,7 +453,7 @@ class Store:
         with self.tx() as db:
             b = db.execute("SELECT * FROM bookings WHERE id=? AND owner=?", (bid,owner)).fetchone()
             if not b or not b["approved"]: raise Rejected("Explicit customer approval required before payment")
-            if self.get_quote(b['quote'],owner).get('address_required') and not self.booking(bid,owner).get('service_address'):
+            if self.get_quote(b['quote'],owner).get('address_required') and not self.booking(bid,owner).get('service_address') and not self.address_deferred(bid):
                 raise Rejected('A service address is required before payment')
             old = db.execute("SELECT * FROM payments WHERE idem=? OR booking=?", (idem,bid)).fetchone()
             if old:

@@ -32,7 +32,9 @@ class ServiceAddresses(unittest.TestCase):
     def start(self):
         self.send(json.dumps(self.job))
         qid=self.store.session('alice')['quotes'][0]
-        return self.send('select '+qid)
+        reply=self.send('select '+qid)
+        choice=next(item['selection'] for item in self.payload(reply)['ctas'] if item['selection']['action']=='open_quote_address')
+        return self.send(json.dumps(choice))
 
     def review(self):
         self.start();return self.send(self.address)

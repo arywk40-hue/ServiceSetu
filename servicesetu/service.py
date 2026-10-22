@@ -24,8 +24,14 @@ class Services:
         if role.startswith("provider:") and action=="quote":
             return s.quote(owner,role.split(":",1)[1],data["slot"],data.get("previous"),job=data.get("job"),address_required=data.get('address_required',False))
         if role=="booking":
+            if action=='provide_address':return s.provide_address(owner,data['booking'],data['address'])
+            if action in ('message','messages'):
+                from .communications import Messaging
+                messages=Messaging(s)
+                if action=='message':return messages.post(data['booking'],owner,'customer',data['text'],data.get('client_id'))
+                return messages.thread(data['booking'],owner,'customer',data.get('after',0))
             if action=="request": return s.request(owner,data["job"])
-            if action=="hold": return s.hold(owner,data["quote"],data.get("recovery_of"),data.get("request_id"),data.get('address'))
+            if action=="hold": return s.hold(owner,data["quote"],data.get("recovery_of"),data.get("request_id"),data.get('address'),data.get('defer_address',False))
             if action=="approve":
                 s.approve(owner,data["booking"],data["quote"])
                 return s.booking(data["booking"],owner)

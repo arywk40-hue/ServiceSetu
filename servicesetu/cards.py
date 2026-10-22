@@ -141,12 +141,23 @@ def shortlist(quotes, excluded, explanation="", recovery=False):
     return envelope("\n".join(lines),"carousel",{"title":"Choose a replacement" if recovery else "Choose a provider", "subtitle":"Seeded demo · INR · slot freshness checked again at approval", "items":items})
 
 
+def address_choice(q,nonce):
+    selection={'quote_id':q['id'],'address_token':nonce}
+    return envelope('Would you like to add a service address? You can skip this and add it after booking. Your service area is '+location_label(q['location'])+'. No appointment has been reserved or paid yet.',
+                    'detail',{'title':'Service address · optional','summary_rows':[{'label':'Service area','value':location_label(q['location'])}],
+                    'ctas':[{'label':'Add address','selection':dict(selection,action='open_quote_address')},{'label':'Skip for now','selection':dict(selection,action='skip_address')}]})
+
+
 def address_form(q,nonce):
-    return envelope('Where should the provider visit?\n\n**Service area:** '+location_label(q['location'])+
-                    '\nEnter your house/flat number, building and street. A landmark is optional. Use a fictional address for this demo.\n\n'
-                    "You can type the address directly. Nothing has been reserved or paid. You will review the address and price before approving. Send 'cancel address' to go back.",
-                    'form',{'title':'Service address · test data','fields':[{'name':'address_line','kind':'text','label':'House/flat, building and street','required':True}],
-                    'submit_cta':{'label':'Review booking','selection':{'action':'set_address','quote_id':q['id'],'address_token':nonce}}})
+    return envelope('Enter your house/flat, building and street. A landmark is optional. Use fictional details for the demo. You can leave this blank and continue without an address.',
+                    'form',{'title':'Service address · optional','fields':[{'name':'address_line','kind':'text','label':'House/flat, building and street (optional)','required':False}],
+                    'submit_cta':{'label':'Continue to review','selection':{'action':'set_address','quote_id':q['id'],'address_token':nonce}}})
+
+
+def booking_address_form(b,nonce):
+    return envelope('You can add the service address now or leave it for later. Your booking and payment will stay unchanged. The assigned provider can view the address for this booking. Use fictional details for this demo.',
+                    'form',{'title':'Add service address · optional','fields':[{'name':'address_line','kind':'text','label':'House/flat, building and street (optional)','required':False}],
+                    'submit_cta':{'label':'Save or continue','selection':{'action':'set_booking_address','booking_id':b['id'],'address_token':nonce}}})
 
 
 def review(q,b,nonce):
@@ -156,9 +167,9 @@ def review(q,b,nonce):
           ("Checked",appointment_label(q["trust"]["checked_at"])),("Cancellation",q["cancellation"]),("Payment","Test mode only"),
           ("Quote version",str(q["version"])),("Hold expires",datetime.fromtimestamp(b["hold_until"],ZoneInfo("Asia/Kolkata")).strftime("%d %B %Y, %I:%M:%S %p IST"))]
     if q.get('location'):rows.insert(1,('Location',location_label(q['location'])))
-    if b.get('service_address'):rows.insert(2,('Service address',b['service_address']['address_line']))
+    rows.insert(2,('Service address',b['service_address']['address_line'] if b.get('service_address') else 'Not provided — you can add it after booking'))
     text="Review before approving:\n"+"\n".join(f"{k}: {v}" for k,v in rows)
-    text+=f"\nTo approve this exact test booking, click Approve or reply: approve {b['id']} {q['id']} {nonce}"
+    text+="\nChoose Approve test payment to confirm, or Release slot to cancel this review."
     if b.get('service_address'):text+="\nTo correct the address before approval, send 'change address'."
     return envelope(text,"review",{"title":"Approve this test booking", "summary_rows":[{"label":k,"value":v} for k,v in rows],
          "approve_cta":{"label":"Approve test payment","selection":dict(selection,action="approve"),"primary":True},
@@ -169,10 +180,34 @@ def booking_status(b,q):
     text=(f"Booking status: {b['state']}.\n\n**Provider:** {q['name']}\n"
           f"**Appointment:** {appointment_label(q['slot'])}\n**Total:** INR {q['amount']/100:.2f}\n"
           f"**Test payment:** {b['payment_state'].replace('_',' ')}\n\n"
-          f"Booking reference: {b['id']}\nSend 'show what happened' for the history.")
+          "Use the options below to view your messages or booking history.")
     if b.get('service_address'):text+='\n**Service address:** '+b['service_address']['address_line']+', '+location_label(b['service_address'])
     return envelope(text,"detail",{"title":f"Booking {b['state']} · test mode", "summary_rows":[
-        {"label":"Booking","value":b["id"]},{"label":"Provider","value":q["name"]},{"label":"Appointment","value":appointment_label(q["slot"])},{"label":"Test payment","value":b["payment_state"].replace('_',' ')}],"ctas":[]},terminal=True)
+        {"label":"Provider","value":q["name"]},{"label":"Appointment","value":appointment_label(q["slot"])},{"label":"Test payment","value":b["payment_state"].replace('_',' ')}],"ctas":([{'label':'Add address','selection':{'action':'add_address','booking_id':b['id']}}] if not b.get('service_address') else [])+[{'label':'Message provider','selection':{'action':'compose_message','booking_id':b['id']}},{'label':'View messages','selection':{'action':'open_messages','booking_id':b['id']}},{'label':'Booking history','selection':{'action':'booking_history','booking_id':b['id']}}] if b['state']=='confirmed' else []},terminal=True)
+
+
+def message_notice(bid):
+    return envelope('Your provider has replied. Open the conversation to read their message.', 'detail',
+                    {'title':'New provider message','summary_rows':[], 'ctas':[{'label':'View conversation','selection':{'action':'open_messages','booking_id':bid}}]})
+
+
+def message_saved(bid):
+    return envelope('Message saved for your assigned provider. It may not have been read yet. Messaging is optional and does not change your booking or payment.', 'detail',
+                    {'title':'Message saved','summary_rows':[], 'ctas':[{'label':'View conversation','selection':{'action':'open_messages','booking_id':bid}}]})
+
+
+def message_thread(bid,result,can_reply=True):
+    lines=['Booking messages · test data','']
+    for item in result['messages']:
+        label='You' if item['side']=='customer' else 'Provider'
+        at=datetime.fromtimestamp(item['at'],ZoneInfo('Asia/Kolkata')).strftime('%d %b, %I:%M %p IST')
+        lines.extend([label+' · '+at,item['text'],''])
+    if not result['messages']:lines.append('No messages in this part of the conversation yet.')
+    lines.append('Messaging is optional. Messages do not change booking terms.')
+    ctas=[{'label':'Reply to provider','selection':{'action':'compose_message','booking_id':bid}}] if can_reply else []
+    if result['has_more']:ctas.append({'label':'More messages','selection':{'action':'open_messages','booking_id':bid,'after':result['next_after']}})
+    ctas.append({'label':'Refresh conversation','selection':{'action':'open_messages','booking_id':bid}})
+    return envelope('\n'.join(lines),'detail',{'title':'Booking conversation','summary_rows':[],'ctas':ctas})
 
 
 def booking_history(events, booking=None):
@@ -228,8 +263,12 @@ def booking_history(events, booking=None):
             text = "Service request received."
             if job.get("slot") and job.get("budget") is not None:
                 text += f" Appointment: {appointment(job['slot'])}. Maximum budget: {money(job['budget'])}."
+        elif kind == 'service_address_deferred':
+            text='Service address skipped for now; it can be provided after booking.'
         elif kind == 'service_address_recorded':
             text='Service address recorded for review: '+payload['address']['address_line']+', '+location_label(payload['address'])+'.'
+        elif kind == 'booking_message_saved':
+            text=('Customer' if payload['side']=='customer' else 'Provider')+' message saved to the booking inbox. Message text is kept out of the audit record.'
         elif kind == "quote_created":
             offer = payload.get("quote", {})
             if offer.get("name") and offer.get("amount") is not None:

@@ -33,6 +33,25 @@ async def smoke(service="ac",nationwide=False):
         state={"replacement":False,"booking":None}
         target=agents["concierge"].address
 
+        async def cancel_provider(ctx):
+            owner=probe.address+':'+str(ctx.session)
+            saved=store.session(owner)
+            pid=store.booking(saved["booking"],owner)["provider"]
+            provider=agents["provider:"+pid]
+            handler=provider._rest_handlers[("POST","/demo/cancel/"+pid)]
+            token=secrets.token_hex(32)
+            prior=os.environ.get("DEMO_CONTROL_TOKEN")
+            os.environ["DEMO_CONTROL_TOKEN"]=token
+            try:
+                rejected=await handler(provider._build_context(),CancelControl(booking=saved["booking"],token="wrong"))
+                assert not rejected.ok
+                cancelled=await handler(provider._build_context(),CancelControl(booking=saved["booking"],token=token))
+                assert cancelled.ok
+                steps.append("authenticated_provider_notice")
+            finally:
+                if prior is None: os.environ.pop("DEMO_CONTROL_TOKEN",None)
+                else: os.environ["DEMO_CONTROL_TOKEN"]=prior
+
         @probe.on_message(model=ChatAcknowledgement)
         async def ack(ctx:Context,sender:str,msg:ChatAcknowledgement): pass
 
@@ -55,6 +74,11 @@ async def smoke(service="ac",nationwide=False):
                                 location=store.get_quote(qid,owner)['location']
                                 assert location['city']=='mumbai' and location['area']=='powai' and location['pincode']=='400076'
                     await ctx.send(target,chat_message(envelope(json.dumps(payload["items"][0]["primary_cta"]["selection"]))))
+                elif kind=='detail' and payload.get('title')=='Service address · optional':
+                    wanted='skip_address' if nationwide and service=='ac' else 'open_quote_address'
+                    selected=next(item['selection'] for item in payload['ctas'] if item['selection']['action']==wanted)
+                    if wanted=='skip_address':steps.append('service_address_deferred')
+                    await ctx.send(target,chat_message(envelope(json.dumps(selected))))
                 elif kind=='form' and payload.get('submit_cta',{}).get('selection',{}).get('action')=='set_address':
                     steps.append('service_address')
                     selected=dict(payload['submit_cta']['selection'],address_line='Flat 12, Demo House, Example Road')
@@ -68,24 +92,28 @@ async def smoke(service="ac",nationwide=False):
                     saved=store.session(owner)
                     if not state["replacement"]:
                         state["booking"]=saved["booking"]
-                        state["replacement"]=True
-                        pid=store.booking(saved["booking"],owner)["provider"]
-                        provider=agents["provider:"+pid]
-                        handler=provider._rest_handlers[("POST","/demo/cancel/"+pid)]
-                        token=secrets.token_hex(32)
-                        prior=os.environ.get("DEMO_CONTROL_TOKEN")
-                        os.environ["DEMO_CONTROL_TOKEN"]=token
-                        try:
-                            rejected=await handler(provider._build_context(),CancelControl(booking=saved["booking"],token="wrong"))
-                            assert not rejected.ok
-                            cancelled=await handler(provider._build_context(),CancelControl(booking=saved["booking"],token=token))
-                            assert cancelled.ok
-                            steps.append("authenticated_provider_notice")
-                        finally:
-                            if prior is None: os.environ.pop("DEMO_CONTROL_TOKEN",None)
-                            else: os.environ["DEMO_CONTROL_TOKEN"]=prior
+                        if service=='ac' and not nationwide:
+                            await ctx.send(target,chat_message(envelope('message provider: Please use the fictional side gate.')))
+                        else:
+                            state['replacement']=True
+                            await cancel_provider(ctx)
                     else:
                         await ctx.send(target,chat_message(envelope("show what happened")))
+                elif text.startswith('Message saved for your assigned provider'):
+                    from .communications import Messaging
+                    owner=probe.address+':'+str(ctx.session);saved=store.session(owner)
+                    inbox=Messaging(store);pid=store.booking(saved['booking'],owner)['provider']
+                    token=inbox.issue_access(pid)
+                    inbox.post(saved['booking'],inbox.authenticate(token),'provider','I will use the fictional side gate.')
+                    steps.append('customer_message_saved')
+                elif text.startswith('Your provider has replied.'):
+                    steps.append('provider_reply_notice')
+                    await ctx.send(target,chat_message(envelope(json.dumps(payload['ctas'][0]['selection']))))
+                elif text.startswith('Booking messages'):
+                    assert 'Please use the fictional side gate.' in text and 'I will use the fictional side gate.' in text
+                    steps.append('booking_messages_read')
+                    state['replacement']=True
+                    await cancel_provider(ctx)
                 elif text.startswith("Booking history"):
                     assert "You approved the exact quote" in text and "Replacement booking confirmed" in text
                     assert "Provider cancelled" in text and text.count("confirmed with") == 2

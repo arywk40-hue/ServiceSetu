@@ -10,7 +10,11 @@ requires-python = ">=3.10,<3.14"
 dependencies = ["tzdata; sys_platform == 'win32'"]
 
 [project.optional-dependencies]
+communications = ["PyNaCl>=1.6,<2"]
 fetch = ["uagents>=0.25.5,<0.26", "openai>=1,<3", "stripe>=12,<15", "python-dotenv>=1,<2"]
 
 [tool.setuptools.packages.find]
 include = ["servicesetu*"]
+
+[tool.setuptools.package-data]
+servicesetu = ["portal/*.html", "portal/*.js", "portal/*.css"]

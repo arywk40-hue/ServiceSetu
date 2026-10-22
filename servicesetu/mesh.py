@@ -158,7 +158,7 @@ def create_mesh(store=None,offline=None,reasoner=None,payment_mode=None):
         text=strip_recipient("\n".join(c.text for c in msg.content if c.type=="text"),concierge.address)
         bus=MeshBus(ctx,addresses)
         try:
-            reply=await conversation.handle(owner,text,bus)
+            reply=await conversation.handle(owner,text,bus,request_id=str(msg.msg_id))
             if reply.get("payment"):
                 payment=reply["payment"]
                 b=payment["booking"]
@@ -171,6 +171,13 @@ def create_mesh(store=None,offline=None,reasoner=None,payment_mode=None):
             ctx.logger.error("Concierge failed; no outcome assumed")
             await ctx.send(sender,chat_message(envelope("I could not finish this request. Ask for status before retrying; persisted booking/payment intents are retained.")))
     concierge.include(chat,publish_manifest=not offline)
+
+    @concierge.on_interval(period=10)
+    async def reply_notices(ctx:Context):
+        from .notifications import notify_customers
+        try:await notify_customers(store,ctx)
+        except Exception:ctx.logger.warning('Provider reply notice unavailable; stored messages remain available')
+
 
     seller=Protocol(spec=payment_protocol_spec,role="seller")
     @seller.on_message(model=CommitPayment)
