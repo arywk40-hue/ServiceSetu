@@ -1,3 +1,4 @@
+from tests.flows import with_address
 import asyncio
 import json
 import sqlite3
@@ -156,7 +157,7 @@ class Proofs(unittest.TestCase):
 
     def test_15_out_of_scope_and_budget(self):
         with self.assertRaises(Rejected): self.s.match(dict(self.job,service="surgery"))
-        with self.assertRaises(Rejected): self.s.match(dict(self.job,area="mumbai"))
+        self.assertEqual(self.s.match(dict(self.job,area="mumbai"))[0],[])
         choices,_=self.s.match(dict(self.job,budget=10000))
         self.assertEqual(choices,[])
 
@@ -164,19 +165,19 @@ class Proofs(unittest.TestCase):
         async def scenario():
             reasoner=Reasoner();reasoner.key=None
             conv=Conversation(self.s,reasoner);bus=LocalBus(Services(self.s))
-            reply=await conv.handle("alice:chat1",json.dumps(dict(self.job,action="search",budget_rupees=1000)),bus)
+            reply=await with_address(conv,"alice:chat1",json.dumps(dict(self.job,action="search",budget_rupees=1000)),bus)
             self.assertEqual(reply["metadata"]["card_kind"],"carousel")
             state=self.s.session("alice:chat1")
-            review=await conv.handle("alice:chat1","select "+state["quotes"][0],bus)
+            review=await with_address(conv,"alice:chat1","select "+state["quotes"][0],bus)
             self.assertEqual(review["metadata"]["card_kind"],"review")
             payload=json.loads(review["metadata"]["card_payload"])
-            denied=await conv.handle("alice:chat1","please pay now",bus)
+            denied=await with_address(conv,"alice:chat1","please pay now",bus)
             self.assertNotIn("confirmed",denied["text"])
-            approved=await conv.handle("alice:chat1",json.dumps(payload["approve_cta"]["selection"]),bus)
+            approved=await with_address(conv,"alice:chat1",json.dumps(payload["approve_cta"]["selection"]),bus)
             self.assertIn("confirmed",approved["text"])
             state=self.s.session("alice:chat1")
             self.s.cancel("alice:chat1",state["booking"],actor="provider:p1")
-            recovery=await conv.handle("alice:chat1","recover",bus)
+            recovery=await with_address(conv,"alice:chat1","recover",bus)
             self.assertIn("replacement needs approval",recovery["text"])
             self.assertIn("provider:p2",[call["role"] for call in bus.calls])
         asyncio.run(scenario())

@@ -1,3 +1,4 @@
+from tests.flows import with_address
 """Customer lifecycle and card interaction proofs independent of live accounts."""
 import asyncio
 import json
@@ -59,17 +60,17 @@ class Intake(unittest.TestCase):
             conv=Conversation(self.store,reasoner);bus=LocalBus(Services(self.store,payment_mode="mock"))
             owner="alice:direct-chat";address="agent1demo_concierge"
             search=json.dumps(dict(self.job,action="search",budget_rupees=1000))
-            await conv.handle(owner,"@servicesetu "+search,bus)
+            await with_address(conv,owner,"@servicesetu "+search,bus)
             qid=self.store.session(owner)["quotes"][0]
             routed="@"+address+" "+json.dumps({"selection":{"action":"select","quote_id":qid}})
-            review=await conv.handle(owner,strip_recipient(routed,address),bus)
+            review=await with_address(conv,owner,strip_recipient(routed,address),bus)
             self.assertEqual(review["metadata"]["card_kind"],"review")
             approval=json.loads(review["metadata"]["card_payload"])["approve_cta"]["selection"]
             wrong=dict(approval,approval_token="at_"+"0"*32)
-            denied=await conv.handle(owner,"@servicesetu "+json.dumps({"selection":wrong}),bus)
+            denied=await with_address(conv,owner,"@servicesetu "+json.dumps({"selection":wrong}),bus)
             self.assertIn("Approval must match",denied["text"])
             self.assertEqual(self.store.booking(approval["booking_id"],owner)["state"],"held")
-            result=await conv.handle(owner,"@servicesetu "+json.dumps({"selection":approval}),bus)
+            result=await with_address(conv,owner,"@servicesetu "+json.dumps({"selection":approval}),bus)
             self.assertIn(": confirmed.",result["text"])
             with self.store.connect() as db:
                 self.assertEqual(db.execute("SELECT count(*) FROM payments").fetchone()[0],1)
@@ -85,18 +86,18 @@ class Intake(unittest.TestCase):
             reasoner=Reasoner();reasoner.key=None
             conv=Conversation(self.store,reasoner);bus=LocalBus(Services(self.store,payment_mode="mock"))
             owner="alice:chat"
-            await conv.handle(owner,json.dumps(dict(self.job,action="search",budget_rupees=1000)),bus)
+            await with_address(conv,owner,json.dumps(dict(self.job,action="search",budget_rupees=1000)),bus)
             quotes=self.store.session(owner)["quotes"]
-            old=await conv.handle(owner,"select "+quotes[0],bus)
+            old=await with_address(conv,owner,"select "+quotes[0],bus)
             old_reject=json.loads(old["metadata"]["card_payload"])["reject_cta"]["selection"]
-            current=await conv.handle(owner,"select "+quotes[1],bus)
+            current=await with_address(conv,owner,"select "+quotes[1],bus)
             bid=self.store.session(owner)["booking"]
-            reply=await conv.handle(owner,json.dumps(old_reject),bus)
+            reply=await with_address(conv,owner,json.dumps(old_reject),bus)
             self.assertIn("old card cannot cancel",reply["text"])
             self.assertEqual(self.store.booking(bid,owner)["state"],"held")
             approve=json.loads(current["metadata"]["card_payload"])["approve_cta"]["selection"]
-            await conv.handle(owner,json.dumps(approve),bus)
-            await conv.handle(owner,"reject",bus)
+            await with_address(conv,owner,json.dumps(approve),bus)
+            await with_address(conv,owner,"reject",bus)
             self.assertEqual(self.store.booking(bid,owner)["state"],"confirmed")
         asyncio.run(scenario())
 
@@ -104,9 +105,9 @@ class Intake(unittest.TestCase):
         async def scenario():
             reasoner=Reasoner();reasoner.key=None
             conv=Conversation(self.store,reasoner);bus=LocalBus(Services(self.store,payment_mode="mock"))
-            await conv.handle("alice:chat","AC service in Indiranagar Bengaluru tomorrow 10am under INR 1000",bus)
+            await with_address(conv,"alice:chat","AC service in Indiranagar Bengaluru tomorrow 10am under INR 1000",bus)
             intent=self.store.session("alice:chat")["intent"]
-            reply=await conv.handle("alice:chat","I need surgery in Mumbai",bus)
+            reply=await with_address(conv,"alice:chat","I need surgery in Mumbai",bus)
             self.assertIn("supports these services",reply["text"])
             self.assertEqual(self.store.session("alice:chat")["intent"],intent)
         asyncio.run(scenario())

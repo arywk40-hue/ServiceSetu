@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 from .catalogue import SERVICES,CATEGORIES,catalogue_text,provider_services
+from .coverage import location_label
 
 
 def service_menu(providers,category=None):
@@ -53,7 +54,9 @@ def job_form(default_slot):
     return envelope("ServiceSetu demo uses fictional providers and test payments. Tell me the service, area, preferred day and time, and maximum budget in normal language, or use this form. Availability will be checked for your requested date.","form",{
         "title":"Find a local service · test data", "fields":[
             {"name":"service","kind":"select","label":"Service package","required":True,"options":[{"value":key,"label":item.get("package",item["label"])} for key,item in SERVICES.items() if item["bookable"]]},
-            {"name":"area","kind":"text","label":"Area (Indiranagar)","required":True},
+            {"name":"city","kind":"text","label":"City in India","required":True},
+            {"name":"area","kind":"text","label":"Locality or neighbourhood","required":True},
+            {"name":"pincode","kind":"text","label":"PIN code (optional)","required":False},
             {"name":"slot","kind":"text","label":"Preferred day and time (e.g. tomorrow at 10 AM)","required":True},
             {"name":"budget_rupees","kind":"number","label":"Maximum budget (INR)","required":True}],
         "submit_cta":{"label":"Find providers","selection":{"action":"search"}}})
@@ -71,11 +74,15 @@ def clarification(partial):
         missing.append("your area and city" if not partial.get("area") and not partial.get("city")
                        else "your area" if not partial.get("area") else "your city")
     if not partial.get("slot"):
-        missing.append("your preferred day and time, such as 'tomorrow at 10 AM'")
+        if partial.get('requested_day'):
+            missing.append('your preferred time; the appointment day is already retained as '+str(partial['requested_day']))
+        elif partial.get('requested_time'):
+            missing.append('your preferred day or date; the time is already retained as '+str(partial['requested_time'])+' IST')
+        else:missing.append("your preferred day and time, such as 'tomorrow at 10 AM'")
     if partial.get("budget") is None:
         missing.append("your maximum budget in INR")
     return envelope("I need a few more details:\n" + "\n".join("- " + field for field in missing)
-                    + "\nYou can reply in normal language. This demo covers Indiranagar, Bengaluru only.")
+                    + "\nYou can reply in normal language. We accept locations across India and check each provider's declared coverage.")
 
 
 def availability_choices(job, options, excluded, token):
@@ -122,6 +129,7 @@ def shortlist(quotes, excluded, explanation="", recovery=False):
         lines.extend(["",f"### {number}. {q['name']} — INR {q['amount']/100:.2f}",
                       f"**Appointment:** {appointment_label(q['slot'])}",f"**Documents:** {label}",
                       f"**Includes:** {q['scope']}",f"**Not included:** {q['exclusions']}"])
+        if q.get('location'):lines.append('**Location:** '+location_label(q['location']))
         items.append({"id":q["id"],"title":q["name"],"subtitle":appointment_label(q["slot"]),"secondary_text":f"INR {q['amount']/100:.2f} · fixed visit price",
             "badges":[{"label":label,"variant":"success" if trust["status"]=="verified" else "warning"}],
             "primary_cta":{"label":"Review quote","selection":{"action":"select","quote_id":q["id"]}}})
@@ -133,14 +141,25 @@ def shortlist(quotes, excluded, explanation="", recovery=False):
     return envelope("\n".join(lines),"carousel",{"title":"Choose a replacement" if recovery else "Choose a provider", "subtitle":"Seeded demo · INR · slot freshness checked again at approval", "items":items})
 
 
+def address_form(q,nonce):
+    return envelope('Where should the provider visit?\n\n**Service area:** '+location_label(q['location'])+
+                    '\nEnter your house/flat number, building and street. A landmark is optional. Use a fictional address for this demo.\n\n'
+                    "You can type the address directly. Nothing has been reserved or paid. You will review the address and price before approving. Send 'cancel address' to go back.",
+                    'form',{'title':'Service address · test data','fields':[{'name':'address_line','kind':'text','label':'House/flat, building and street','required':True}],
+                    'submit_cta':{'label':'Review booking','selection':{'action':'set_address','quote_id':q['id'],'address_token':nonce}}})
+
+
 def review(q,b,nonce):
     selection={"booking_id":b["id"],"quote_id":q["id"],"approval_token":nonce}
     rows=[("Provider",q["name"]),("Appointment",appointment_label(q["slot"])),("Fixed total",f"INR {q['amount']/100:.2f}"),
           ("Scope",q["scope"]),("Excluded",q["exclusions"]),("Documents",document_label(q["trust"])),
           ("Checked",appointment_label(q["trust"]["checked_at"])),("Cancellation",q["cancellation"]),("Payment","Test mode only"),
           ("Quote version",str(q["version"])),("Hold expires",datetime.fromtimestamp(b["hold_until"],ZoneInfo("Asia/Kolkata")).strftime("%d %B %Y, %I:%M:%S %p IST"))]
+    if q.get('location'):rows.insert(1,('Location',location_label(q['location'])))
+    if b.get('service_address'):rows.insert(2,('Service address',b['service_address']['address_line']))
     text="Review before approving:\n"+"\n".join(f"{k}: {v}" for k,v in rows)
     text+=f"\nTo approve this exact test booking, click Approve or reply: approve {b['id']} {q['id']} {nonce}"
+    if b.get('service_address'):text+="\nTo correct the address before approval, send 'change address'."
     return envelope(text,"review",{"title":"Approve this test booking", "summary_rows":[{"label":k,"value":v} for k,v in rows],
          "approve_cta":{"label":"Approve test payment","selection":dict(selection,action="approve"),"primary":True},
          "reject_cta":{"label":"Release slot","selection":dict(selection,action="reject")}})
@@ -151,6 +170,7 @@ def booking_status(b,q):
           f"**Appointment:** {appointment_label(q['slot'])}\n**Total:** INR {q['amount']/100:.2f}\n"
           f"**Test payment:** {b['payment_state'].replace('_',' ')}\n\n"
           f"Booking reference: {b['id']}\nSend 'show what happened' for the history.")
+    if b.get('service_address'):text+='\n**Service address:** '+b['service_address']['address_line']+', '+location_label(b['service_address'])
     return envelope(text,"detail",{"title":f"Booking {b['state']} · test mode", "summary_rows":[
         {"label":"Booking","value":b["id"]},{"label":"Provider","value":q["name"]},{"label":"Appointment","value":appointment_label(q["slot"])},{"label":"Test payment","value":b["payment_state"].replace('_',' ')}],"ctas":[]},terminal=True)
 
@@ -208,6 +228,8 @@ def booking_history(events, booking=None):
             text = "Service request received."
             if job.get("slot") and job.get("budget") is not None:
                 text += f" Appointment: {appointment(job['slot'])}. Maximum budget: {money(job['budget'])}."
+        elif kind == 'service_address_recorded':
+            text='Service address recorded for review: '+payload['address']['address_line']+', '+location_label(payload['address'])+'.'
         elif kind == "quote_created":
             offer = payload.get("quote", {})
             if offer.get("name") and offer.get("amount") is not None:

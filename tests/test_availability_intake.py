@@ -1,3 +1,4 @@
+from tests.flows import with_address
 """Normal language intake and explicit, request-bound appointment choices."""
 import asyncio
 import json
@@ -29,7 +30,7 @@ class AvailabilityIntake(unittest.TestCase):
         self.bus = LocalBus(Services(self.store, payment_mode="mock"))
 
     def send(self, text, owner="alice"):
-        return asyncio.run(self.conversation.handle(owner, text, self.bus))
+        return asyncio.run(with_address(self.conversation,owner,text,self.bus))
 
     def unavailable_request(self, budget=1000):
         date = datetime.fromisoformat(self.slot).timestamp() + 86400
@@ -63,7 +64,7 @@ class AvailabilityIntake(unittest.TestCase):
 
     def test_follow_up_only_asks_for_missing_details(self):
         reply = self.send("My AC is not cooling in Indiranagar Bengaluru tomorrow")
-        self.assertIn("preferred day and time", reply["text"])
+        self.assertIn("preferred time", reply["text"])
         self.assertIn("maximum budget", reply["text"])
         self.assertNotIn("- your area", reply["text"])
         reply = self.send("10 AM")
@@ -135,16 +136,16 @@ class AvailabilityIntake(unittest.TestCase):
         self.assertIn("no longer current", denied["text"])
 
     def test_form_accepts_normal_day_and_time_without_iso_timestamp(self):
-        reply = self.send(json.dumps({"action":"search", "service":"ac", "area":"Indiranagar",
+        reply = self.send(json.dumps({"action":"search", "service":"ac", "city":"Bengaluru", "area":"Indiranagar",
                                      "slot":"tomorrow at 10 AM", "budget_rupees":1000}))
         self.assertIn("Provider-confirmed demo quotes", reply["text"])
         self.assertEqual(self.store.session("alice")["job"]["slot"], self.slot)
         self.assertNotIn(self.slot, reply["text"])
 
     def test_vague_form_time_keeps_known_fields_for_follow_up(self):
-        reply = self.send(json.dumps({"action":"search", "service":"ac", "area":"Indiranagar",
+        reply = self.send(json.dumps({"action":"search", "service":"ac", "city":"Bengaluru", "area":"Indiranagar",
                                      "slot":"tomorrow morning", "budget_rupees":1000}))
-        self.assertIn("preferred day and time", reply["text"])
+        self.assertIn("preferred time", reply["text"])
         self.assertNotIn("- your maximum budget", reply["text"])
         reply = self.send("10 AM")
         self.assertIn("Provider-confirmed demo quotes", reply["text"])

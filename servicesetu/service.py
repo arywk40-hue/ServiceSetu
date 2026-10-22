@@ -2,6 +2,8 @@
 import asyncio
 from .core import Rejected
 from .payments import Payments
+from .coverage import covers
+from .catalogue import provider_services
 
 
 class Services:
@@ -15,14 +17,15 @@ class Services:
             return {"options":s.available_slots(data["job"])}
         if role=="matching" and action=="match":
             choices,excluded=s.match(data["job"])
-            return {"providers":[p["id"] for p in choices],"excluded":excluded}
+            return {"providers":[p["id"] for p in choices],"excluded":excluded,
+                    "coverage_count":sum(data['job']['service'] in provider_services(p) and covers(p,data['job']) for p in s.providers())}
         if role=="verification" and action=="check":
             return s.trust(s.provider(data["provider"]),data["slot"])
         if role.startswith("provider:") and action=="quote":
-            return s.quote(owner,role.split(":",1)[1],data["slot"],data.get("previous"),job=data.get("job"))
+            return s.quote(owner,role.split(":",1)[1],data["slot"],data.get("previous"),job=data.get("job"),address_required=data.get('address_required',False))
         if role=="booking":
             if action=="request": return s.request(owner,data["job"])
-            if action=="hold": return s.hold(owner,data["quote"],data.get("recovery_of"),data.get("request_id"))
+            if action=="hold": return s.hold(owner,data["quote"],data.get("recovery_of"),data.get("request_id"),data.get('address'))
             if action=="approve":
                 s.approve(owner,data["booking"],data["quote"])
                 return s.booking(data["booking"],owner)

@@ -5,7 +5,10 @@ import secrets
 from .core import Rejected
 from . import cards
 from .reasoning import Reasoner,rupees
-from .locations import clean_context,resolve,location_only
+from .locations import clean_context,resolve,location_only,mentions,canonical,bare_location_answer,LOCATION_FIELDS
+from .coverage import requires_pin,location_label
+from .addresses import validate_address
+from .appointments import appointment
 from .catalogue import SERVICES,CATEGORIES,unavailable_message,package_from_text,detect_service
 from .service_details import FIELDS,extract_details,validate_details,next_question
 
@@ -57,6 +60,26 @@ class Conversation:
         self.store=store
         self.reasoner=reasoner or Reasoner()
 
+    def ask_address(self,owner,state,q):
+        if q['expires']<=self.store.clock():raise Rejected('Quote expired; request fresh providers before adding an address')
+        nonce='ad_'+secrets.token_hex(16)
+        state.update(pending_address_quote=q['id'],address_token=nonce)
+        state.pop('approval_token',None)
+        self.store.save_session(owner,state)
+        return cards.address_form(q,nonce)
+
+    async def review_address(self,owner,state,q,address,bus):
+        try:validate_address(address,q['location'])
+        except ValueError as exc:raise Rejected(str(exc)) from None
+        request_id=state.get('intent')
+        if request_id and self.store.booking(request_id,owner)['state']!='requested':request_id=None
+        b=await bus.call('booking','hold',owner,quote=q['id'],recovery_of=state.get('recovery_of'),request_id=request_id,address=address)
+        nonce='at_'+secrets.token_hex(16)
+        state.update(booking=b['id'],quote=q['id'],approval_token=nonce)
+        for field in ('pending_address_quote','address_token'):state.pop(field,None)
+        self.store.save_session(owner,state)
+        return cards.review(q,b,nonce)
+
     def details_check(self,owner,state,partial):
         service=partial.get("service")
         details=partial.get("details",{})
@@ -87,6 +110,7 @@ class Conversation:
 
     def location_check(self, owner, state, partial, text=""):
         partial, proposal, unsupported = resolve(partial,text)
+        location_error=partial.pop('_location_error',None)
         state["partial_job"]=partial
         state.pop("availability_options",None)
         state.pop("availability_token",None)
@@ -94,11 +118,20 @@ class Conversation:
         if proposal: state["pending_location"]=proposal
         self.store.save_session(owner,state)
         if proposal:
-            labels={"area":"Indiranagar","city":"Bengaluru"}
-            place=", ".join(labels[field] for field in ("area","city") if field in proposal)
+            place=location_label(proposal)
             return partial,cards.envelope(f"Did you mean {place}? Reply yes to confirm the location, or tell me the correct area and city. This confirms only your location, not a booking or payment.")
         if unsupported:
-            return partial,cards.envelope("This demo serves Indiranagar in Bengaluru only. Please tell me your area and city again. I have kept the other request details; no new booking was made.")
+            return partial,cards.envelope((location_error or 'Please provide your Indian city and locality (PIN optional).')+' Your other request details are retained. No booking or payment was made.')
+        if requires_pin(partial,self.store.providers()):
+            state['pending_pin']=True
+            state['pending_location_field']='pincode'
+            self.store.save_session(owner,state)
+            return partial,cards.envelope('Please give the six-digit PIN code for '+location_label(partial)+'. I will check provider coverage there. Your service, appointment and budget are retained; nothing has been reserved or paid.')
+        state.pop('pending_pin',None)
+        missing=next((field for field in ('city','area') if not partial.get(field)),None)
+        if missing:state['pending_location_field']=missing
+        else:state.pop('pending_location_field',None)
+        self.store.save_session(owner,state)
         return partial,None
 
     async def quotes(self,bus,owner,job,recovery_of=None):
@@ -111,16 +144,22 @@ class Conversation:
         intent=await bus.call("booking","request",owner,job=job)
         result=await bus.call("recovery" if recovery_of else "matching","alternatives" if recovery_of else "match",owner,
                               job=job,**({"booking":recovery_of} if recovery_of else {}))
+        if result.get('coverage_count',1)==0:
+            state.update(job=job,partial_job=job,quotes=[],intent=intent['id'],recovery_of=recovery_of)
+            for field in ('pending_address_quote','address_token','approval_token','availability_options','availability_token'):state.pop(field,None)
+            self.store.save_session(owner,state)
+            return cards.envelope('No onboarded demo provider currently covers '+location_label(job)+' for '+SERVICES[job['service']]['label']+'. Your location was accepted. No appointment was reserved or payment taken. You can provide a different locality, or request human review.')
         quotes=[]
         excluded=result["excluded"]
         for pid in result["providers"]:
             try:
                 trust=await bus.call("verification","check",owner,provider=pid,slot=job["slot"])
                 if not trust["eligible"]: continue
-                q=await bus.call("provider:"+pid,"quote",owner,slot=job["slot"],job=job)
+                q=await bus.call("provider:"+pid,"quote",owner,slot=job["slot"],job=job,address_required=True)
                 # Validate worker evidence against deterministic requirements.
                 canonical=self.store.get_quote(q["id"],owner)
-                if canonical["provider"]!=pid or canonical["slot"]!=job["slot"] or canonical["amount"]>job["budget"] or canonical.get("service")!=job["service"] or canonical.get("details",{})!=job.get("details",{}):
+                expected_location={field:job[field] for field in LOCATION_FIELDS if field in job}
+                if canonical["provider"]!=pid or canonical["slot"]!=job["slot"] or canonical["amount"]>job["budget"] or canonical.get("service")!=job["service"] or canonical.get("details",{})!=job.get("details",{}) or canonical.get('location')!=expected_location or not canonical.get('address_required'):
                     raise Rejected("Provider quote violates request limits")
                 quotes.append(canonical)
             except (Rejected,TimeoutError):
@@ -131,6 +170,7 @@ class Conversation:
         state.pop("availability_options",None)
         state.pop("availability_token",None)
         state.pop("approval_token",None)
+        for field in ('pending_address_quote','address_token'):state.pop(field,None)
         state.pop("partial_job",None)
         self.store.save_session(owner,state)
         if not quotes:
@@ -166,7 +206,7 @@ class Conversation:
                 partial={"service":service,"details":{}}
                 if SERVICES[service].get("package"): partial["package"]=SERVICES[service]["package"]
                 state["partial_job"]=partial
-                for field in ("pending_location","pending_service_field","availability_options","availability_token","quotes","quote","approval_token"):
+                for field in ("pending_address_quote","address_token","pending_location","pending_location_field","pending_pin","pending_service_field","availability_options","availability_token","quotes","quote","approval_token"):
                     state.pop(field,None)
                 self.store.save_session(owner,state)
                 return self.details_check(owner,state,partial) or cards.clarification(partial)
@@ -198,8 +238,11 @@ class Conversation:
                 job=dict(state["job"],slot=options[index-1]["slot"])
                 return await self.quotes(bus,owner,job)
             if action=="search":
-                job={"service":str(picked.get("service","")).strip().casefold(),"area":picked.get("area",""),"city":picked.get("city","bengaluru"),
+                for field in ('pending_address_quote','address_token','approval_token'):state.pop(field,None)
+                self.store.save_session(owner,state)
+                job={"service":str(picked.get("service","")).strip().casefold(),"area":picked.get("area",""),"city":picked.get("city"),
                      "slot":picked.get("slot"),"budget":rupees(picked.get("budget_rupees"))}
+                job.update({field:picked[field] for field in ('pincode','country') if picked.get(field) not in (None,'')})
                 # The form labels explicitly name each bounded service package.
                 package=SERVICES.get(job["service"],{}).get("package")
                 if package: job["package"]=package
@@ -209,6 +252,8 @@ class Conversation:
                 if isinstance(job["slot"],str) and not re.match(r"^\d{4}-\d{2}-\d{2}T",job["slot"]):
                     parsed=await self.reasoner.parse(job["slot"],self.store.clock())
                     job["slot"]=parsed.get("slot")
+                    if parsed.get('_appointment_error'):return cards.envelope(parsed['_appointment_error'])
+                    if parsed.get('requested_time'):job['requested_time']=parsed['requested_time']
                     if parsed.get("requested_day"): job["requested_day"]=parsed["requested_day"]
                 job,location_reply=self.location_check(owner,state,job)
                 if location_reply: return location_reply
@@ -217,6 +262,26 @@ class Conversation:
                 if state.get("booking") and self.store.booking(state["booking"],owner)["state"]=="held":
                     await bus.call("payment","cancel",owner,booking=state["booking"])
                 return await self.quotes(bus,owner,job)
+            if low.strip()=='cancel address':
+                for field in ('pending_address_quote','address_token','approval_token'):state.pop(field,None)
+                self.store.save_session(owner,state)
+                return cards.envelope('Address entry cancelled. No new booking was reserved or paid. Choose a provider again when ready.')
+            if low.strip()=='change address':
+                if not state.get('quote') or not state.get('booking'):raise Rejected('Choose a provider first')
+                b=self.store.booking(state['booking'],owner)
+                if b['state']!='held':raise Rejected('Start a new request to change the address of a confirmed or cancelled booking')
+                if state.get('recovery_of'):raise Rejected('A replacement keeps the original address; start a new request to change it')
+                await bus.call('payment','cancel',owner,booking=b['id'])
+                return self.ask_address(owner,state,self.store.get_quote(state['quote'],owner))
+            if action=='set_address' or (state.get('pending_address_quote') and not action and low.strip() not in ('status','booking status','show what happened','audit','timeline','audit details','help','cancel booking','recover','find a replacement','provider cancelled')):
+                qid=state.get('pending_address_quote')
+                if not qid or (action and (picked.get('quote_id')!=qid or picked.get('address_token')!=state.get('address_token'))):
+                    raise Rejected('This address form is no longer current; select a provider again')
+                q=self.store.get_quote(qid,owner)
+                address=picked.get('address_line') if action else text
+                if not action and (detect_service(text) or re.search(r'\b(change|budget|tomorrow|under)\b',low)):
+                    return cards.envelope("Please finish the service address, or send 'cancel address' before changing the request. Nothing has been reserved or paid.")
+                return await self.review_address(owner,state,q,address,bus)
             if action=="select":
                 if state.get("partial_job"):
                     return self.details_check(owner,state,state["partial_job"]) or cards.clarification(state["partial_job"])
@@ -227,13 +292,10 @@ class Conversation:
                     if old["state"]=="held" and old["quote"]!=qid:
                         await bus.call("payment","cancel",owner,booking=old["id"])
                 q=self.store.get_quote(qid,owner)
-                request_id=state.get("intent")
-                if request_id and self.store.booking(request_id,owner)["state"]!="requested": request_id=None
-                b=await bus.call("booking","hold",owner,quote=qid,recovery_of=state.get("recovery_of"),request_id=request_id)
-                nonce="at_"+secrets.token_hex(16)
-                state.update(booking=b["id"],quote=qid,approval_token=nonce)
-                self.store.save_session(owner,state)
-                return cards.review(q,b,nonce)
+                if state.get('recovery_of'):
+                    address=self.store.booking(state['recovery_of'],owner).get('service_address')
+                    if address:return await self.review_address(owner,state,q,address['address_line'],bus)
+                return self.ask_address(owner,state,q)
             if action=="approve":
                 required={"booking_id":state.get("booking"),"quote_id":state.get("quote"),"approval_token":state.get("approval_token")}
                 if not all(required.values()) or any(picked.get(k)!=v for k,v in required.items()):
@@ -281,6 +343,7 @@ class Conversation:
                 return cards.job_form(self.store.providers()[0]["slots"][0])
             # Parsing is permitted only for intake. Model output cannot authorize payment.
             partial=clean_context(state.get("partial_job",{}))
+            typed_location={}
             for field in ("quotes","quote","approval_token","availability_options","availability_token"):
                 state.pop(field,None)
             self.store.save_session(owner,state)
@@ -292,17 +355,45 @@ class Conversation:
                 state.pop("pending_location",None)
                 state["partial_job"]=partial
                 self.store.save_session(owner,state)
-                return cards.envelope("Please tell me the correct area and city. This demo currently serves Indiranagar in Bengaluru only. Your other request details are retained.")
+                return cards.envelope("Please tell me the correct locality and city in India (PIN optional). Your other request details are retained.")
             else:
                 pending=state.get("pending_service_field")
                 detail_answer=extract_details(partial.get("service"),text,pending) if pending else {}
-                if detail_answer and len(text.split())<=5 and detect_service(text) is None and not re.search(r"\d{4}-|\b(today|tomorrow|budget|under|inr|bangalore|bengaluru|indiranagar)\b",low):
+                if location_only(text):
+                    job=mentions(text)
+                elif not pending and not detect_service(text) and bare_location_answer(text,state.get('pending_location_field')):
+                    typed_location={state['pending_location_field']:text.strip()}
+                    job=dict(typed_location)
+                elif detail_answer and len(text.split())<=5 and detect_service(text) is None and not re.search(r"\d{4}-|\b(today|tomorrow|budget|under|inr|bangalore|bengaluru|indiranagar)\b",low):
                     # A short answer to a typed question must not reinterpret the budget or date.
                     job={}
                 else:
                     job=await self.reasoner.parse(text,self.store.clock(),partial)
                 if location_only(text):
-                    job={field:job.get(field) for field in ("city","area")}
+                    job={field:job.get(field) for field in LOCATION_FIELDS}
+            timing=appointment(text,self.store.clock(),partial)
+            if timing.get('_appointment_error'):
+                partial.pop('slot',None)
+                partial.pop('requested_day',None)
+                partial.pop('requested_time',None)
+                state['partial_job']=partial
+                self.store.save_session(owner,state)
+                return cards.envelope(timing['_appointment_error']+' Your service, location and budget are retained. No booking or payment was made.')
+            if timing:
+                job.update(timing)
+                for field in ('slot','requested_day','requested_time'):
+                    if field in timing and timing[field] is None:partial.pop(field,None)
+            explicit_location=mentions(text)
+            explicit_location.update(typed_location)
+            old_city=canonical(partial.get('city'),'city')
+            new_city=canonical(explicit_location.get('city'),'city')
+            if old_city and new_city and old_city!=new_city:
+                for field in ('area','pincode'):
+                    partial.pop(field,None)
+                    job[field]=explicit_location.get(field)
+            elif explicit_location.get('area') and partial.get('area') and canonical(explicit_location['area'],'area')!=canonical(partial['area'],'area'):
+                partial.pop('pincode',None);job['pincode']=explicit_location.get('pincode')
+            job.update({field:value for field,value in explicit_location.items() if field in LOCATION_FIELDS})
             if job.get("requested_day") and not job.get("slot") and partial.get("slot") and partial["slot"][:10]!=job["requested_day"]:
                 partial.pop("slot",None)
             explicit_service=detect_service(text)

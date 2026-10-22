@@ -96,7 +96,7 @@ def profile(role):
     return (f"# ServiceSetu {role}\n\n"
         "![tag:innovationlab](https://img.shields.io/badge/innovationlab-3D8BD3)\n"
         "![tag:hackathon](https://img.shields.io/badge/hackathon-5F43F1)\n\n"
-        +("Book fictional home-service packages in Indiranagar, Bengaluru. Ask show services for the available packages, including cleaning, appliance inspections, repairs and furniture assembly. Provider availability depends on the active demo database. Compare provider agents, see honest trust labels, approve one quote, receive a test booking, and recover from provider cancellation. Try: AC service in Indiranagar Bengaluru tomorrow 10am under INR 1000. Ask show what happened for an audit timeline. " if customer else
+        +("Request fictional home-service packages at Indian locations. Provide city and locality (PIN optional); booking depends on each provider's declared coverage. Ask show services for the available packages, including cleaning, appliance inspections, repairs and furniture assembly. Provider availability depends on the active demo database. Compare provider agents, see honest trust labels, approve one quote, receive a test booking, and recover from provider cancellation. Try: AC service in Indiranagar Bengaluru tomorrow 10am under INR 1000. Ask show what happened for an audit timeline. " if customer else
           f"Internal ServiceSetu {role} specialist. Not a customer chat entry point. Accepts typed Work messages only from the Concierge. ")
         +"Providers, credentials and registry are seeded test data. Payment is simulated or Stripe test mode; no real service or money. Discretionary refunds, payouts and verification overrides require human review.\n")
 

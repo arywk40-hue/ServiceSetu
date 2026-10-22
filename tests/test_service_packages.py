@@ -1,3 +1,4 @@
+from tests.flows import with_address
 """Package details bind matching, pricing, approval and shared capacity."""
 import asyncio
 import json
@@ -27,7 +28,7 @@ class ServicePackages(unittest.TestCase):
         self.slot=self.store.provider('p1')['slots'][0]
 
     def send(self,text,owner='alice'):
-        return asyncio.run(self.conversation.handle(owner,text,self.bus))
+        return asyncio.run(with_address(self.conversation,owner,text,self.bus))
 
     def request(self,service,owner='alice'):
         requests={
@@ -135,7 +136,7 @@ class ServicePackages(unittest.TestCase):
 
     def test_cleaning_packages_share_provider_capacity(self):
         self.request('kitchen_cleaning')
-        quote=self.current_quote();self.store.hold('alice',quote['id'])
+        quote=self.current_quote();self.store.hold('alice',quote['id'],address='Flat 12, Demo House, Example Road')
         reply=self.request('sofa_cleaning','bob')
         self.assertEqual(reply['metadata']['card_kind'],'carousel')
         self.assertTrue(all(self.store.get_quote(qid,'bob')['provider']!=quote['provider']
@@ -246,10 +247,10 @@ class ServicePackages(unittest.TestCase):
             provider['offerings'].pop('sofa_cleaning')
             with self.store.tx() as db:db.execute('UPDATE providers SET payload=? WHERE id=?',(json.dumps(provider),provider['id']))
         remove()
-        with self.assertRaises(Rejected):self.store.hold('alice',quote['id'])
+        with self.assertRaises(Rejected):self.store.hold('alice',quote['id'],address='Flat 12, Demo House, Example Road')
         provider['offerings']['sofa_cleaning']=24900
         with self.store.tx() as db:db.execute('UPDATE providers SET payload=? WHERE id=?',(json.dumps(provider),provider['id']))
-        held=self.store.hold('alice',quote['id']);self.store.approve('alice',held['id'],quote['id'])
+        held=self.store.hold('alice',quote['id'],address='Flat 12, Demo House, Example Road');self.store.approve('alice',held['id'],quote['id'])
         remove()
         with self.assertRaises(Rejected):self.store.begin_payment('alice',held['id'],'test-idempotency')
 

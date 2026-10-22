@@ -1,3 +1,4 @@
+from tests.flows import with_address
 """Readable provider facts and conversational wording do not grant authority."""
 import asyncio
 import json
@@ -30,7 +31,7 @@ class CustomerLanguage(unittest.TestCase):
         self.bus = LocalBus(Services(self.store, payment_mode="mock"))
 
     def send(self, text):
-        return asyncio.run(self.conversation.handle("alice", text, self.bus))
+        return asyncio.run(with_address(self.conversation,"alice",text,self.bus))
 
     def quotes(self):
         return [self.store.quote("alice", p, self.slot) for p in ("p1", "p2")]

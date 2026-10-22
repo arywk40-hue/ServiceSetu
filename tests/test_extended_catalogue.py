@@ -1,3 +1,4 @@
+from tests.flows import with_address
 """Twelve packages reuse trusted identity, approval and capacity boundaries."""
 import asyncio
 import json
@@ -28,7 +29,7 @@ class ExtendedCatalogue(unittest.TestCase):
         self.slot=self.store.provider('p1')['slots'][0]
 
     def send(self,text,owner='alice'):
-        return asyncio.run(self.conversation.handle(owner,text,self.bus))
+        return asyncio.run(with_address(self.conversation,owner,text,self.bus))
 
     def request(self,service,owner='alice',budget=5000):
         text={'mattress_cleaning':'mattress cleaning for two queen mattresses',
@@ -155,7 +156,7 @@ class ExtendedCatalogue(unittest.TestCase):
         for service,other in (('mattress_cleaning','carpet_cleaning'),('refrigerator','water_purifier')):
             with self.subTest(service=service):
                 self.request(service,service);quote=self.quote(service)
-                self.store.hold(service,quote['id'])
+                self.store.hold(service,quote['id'],address='Flat 12, Demo House, Example Road')
                 self.request(other,other)
                 self.assertTrue(all(self.store.get_quote(qid,other)['provider']!=quote['provider']
                                     for qid in self.store.session(other)['quotes']))

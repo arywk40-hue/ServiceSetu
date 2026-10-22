@@ -1,3 +1,4 @@
+from tests.flows import with_address
 """Location corrections replace stale values without inventing consent."""
 import asyncio
 import json
@@ -30,19 +31,19 @@ class LocationCorrections(unittest.TestCase):
         self.bus = LocalBus(Services(self.store, payment_mode="mock"))
 
     def send(self, text):
-        return asyncio.run(self.conversation.handle("alice", text, self.bus))
+        return asyncio.run(with_address(self.conversation,"alice",text,self.bus))
 
     def seed_partial(self, **changes):
         self.store.save_session("alice", {"partial_job":dict(self.job, **changes)})
 
-    def test_existing_stale_city_is_not_passed_back_to_model(self):
+    def test_unserved_city_is_retained_until_explicitly_corrected(self):
         self.seed_partial(city="Gandhinagar")
         self.reasoner.parse = AsyncMock(return_value={"area":"Indiranagar", "city":None})
         reply = self.send("Indiranagar")
-        self.assertIsNone(self.reasoner.parse.call_args.args[2]["city"])
-        self.assertIn("Did you mean Indiranagar, Bengaluru", reply["text"])
-        self.assertIsNone(self.store.session("alice")["partial_job"]["city"])
-        reply = self.send("YES, CORRECT!")
+        self.reasoner.parse.assert_not_called()
+        self.assertIn("Your location was accepted", reply["text"])
+        self.assertEqual(self.store.session("alice")["partial_job"]["city"],'gandhinagar')
+        reply = self.send("city: Bengaluru; area: Indiranagar")
         self.assertIn("Provider-confirmed demo quotes", reply["text"])
         state = self.store.session("alice")
         self.assertEqual(state["job"]["city"], "bengaluru")
@@ -52,6 +53,8 @@ class LocationCorrections(unittest.TestCase):
     def test_explicit_city_correction_replaces_stale_city(self):
         self.seed_partial(city="Gandhinagar")
         reply = self.send("Actually BANGALORE")
+        self.assertIn('your area',reply['text'])
+        reply=self.send('area: Indiranagar')
         self.assertIn("Provider-confirmed demo quotes", reply["text"])
         self.assertEqual(self.store.session("alice")["job"]["city"], "bengaluru")
 
@@ -73,20 +76,22 @@ class LocationCorrections(unittest.TestCase):
         with self.store.connect() as db:
             self.assertEqual(db.execute("SELECT count(*) FROM payments").fetchone()[0], 0)
 
-    def test_unsupported_city_is_cleared_and_does_not_loop(self):
+    def test_unserved_city_gets_coverage_message_and_can_be_corrected(self):
         self.reasoner.parse = AsyncMock(return_value=dict(self.job, city="Gandhinagar"))
         reply = self.send("AC service in Gandhinagar")
-        self.assertIn("This demo serves Indiranagar in Bengaluru only", reply["text"])
-        self.assertIsNone(self.store.session("alice")["partial_job"]["city"])
+        self.assertIn("Your location was accepted", reply["text"])
+        self.assertEqual(self.store.session("alice")["partial_job"]["city"],'gandhinagar')
+        reply=self.send('382007')
+        self.assertIn('Your location was accepted',reply['text'])
         self.reasoner.parse = AsyncMock(return_value={"city":"Bengaluru"})
-        reply = self.send("Bengaluru")
+        reply = self.send("Bengaluru Indiranagar")
         self.assertIn("Provider-confirmed demo quotes", reply["text"])
 
     def test_rejecting_suggestion_preserves_other_request_details(self):
-        self.seed_partial(city="Gandhinagar")
-        self.send("Indiranagar")
+        self.seed_partial(city=None)
+        self.send("Indranagar")
         reply = self.send("no")
-        self.assertIn("correct area and city", reply["text"])
+        self.assertIn("correct locality and city", reply["text"])
         state = self.store.session("alice")
         self.assertNotIn("pending_location", state)
         self.assertEqual(state["partial_job"]["budget"], 100000)
@@ -114,14 +119,14 @@ class LocationCorrections(unittest.TestCase):
     def test_bare_yes_without_location_question_does_not_supply_location(self):
         self.send("yes")
         self.assertNotIn("pending_location", self.store.session("alice"))
-        self.assertIsNone(canonical("Gandhinagar", "city"))
+        self.assertEqual(canonical("Gandhinagar", "city"),'gandhinagar')
 
     def test_negated_supported_area_is_not_an_explicit_location_mention(self):
         from servicesetu.locations import mentions
         self.assertNotIn("area", mentions("not in Indiranagar"))
 
     def test_area_only_typo_confirms_supported_city_in_the_same_question(self):
-        self.seed_partial(city="Gandhinagar")
+        self.seed_partial(city=None)
         reply = self.send("Indranagar")
         self.assertIn("Did you mean Indiranagar, Bengaluru", reply["text"])
         reply = self.send("yes")

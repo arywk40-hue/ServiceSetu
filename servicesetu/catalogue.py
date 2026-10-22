@@ -105,7 +105,7 @@ def catalogue_text(providers,category=None):
         status=f"{count} demo providers; availability and credentials checked for your appointment" if count else "no providers in this demo database"
         lines.append(f"- **{item['label']}:** {status}.")
         lines.append(f"  Package: {item['scope']}.")
-    lines.extend(["", "Demo area: Indiranagar, Bengaluru. Tell me the service, area, date, time and budget to begin."])
+    lines.extend(["", "We accept city, locality and PIN code across India. Availability depends on each provider's declared coverage. Tell me your service, location, date, time and budget to begin."])
     return "\n".join(lines)
 
 

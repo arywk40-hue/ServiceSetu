@@ -20,11 +20,11 @@ from .service import Services
 from .catalogue import SERVICES,provider_services
 
 
-async def smoke(service="ac"):
+async def smoke(service="ac",nationwide=False):
     with tempfile.TemporaryDirectory() as tmp:
         reasoner=Reasoner();reasoner.key=None
         store=Store(Path(tmp)/"mesh.db")
-        store.seed(expanded=service in ("cleaning","electrical"),full_catalogue=service in ("kitchen_cleaning","sofa_cleaning","washing_machine","furniture"),extended_catalogue=service in ("mattress_cleaning","carpet_cleaning","refrigerator","water_purifier"))
+        store.seed(expanded=service in ("cleaning","electrical"),full_catalogue=service in ("kitchen_cleaning","sofa_cleaning","washing_machine","furniture"),extended_catalogue=service in ("mattress_cleaning","carpet_cleaning","refrigerator","water_purifier"),nationwide_demo=nationwide)
         bureau,agents,store=create_mesh(store,offline=True,reasoner=reasoner,payment_mode="mock")
         probe=OfflineAgent(name="ServiceSetu-Smoke-Customer",seed="servicesetu-public-smoke-customer",registration_policy=NoRegistration(),enable_agent_inspector=False,publish_agent_details=False)
         finished=asyncio.get_running_loop().create_future()
@@ -49,7 +49,16 @@ async def smoke(service="ac"):
                         steps.append("availability_choices")
                     else:
                         steps.append("recovery_shortlist" if state["replacement"] else "shortlist")
+                        if nationwide:
+                            owner=probe.address+':'+str(ctx.session)
+                            for qid in store.session(owner)['quotes']:
+                                location=store.get_quote(qid,owner)['location']
+                                assert location['city']=='mumbai' and location['area']=='powai' and location['pincode']=='400076'
                     await ctx.send(target,chat_message(envelope(json.dumps(payload["items"][0]["primary_cta"]["selection"]))))
+                elif kind=='form' and payload.get('submit_cta',{}).get('selection',{}).get('action')=='set_address':
+                    steps.append('service_address')
+                    selected=dict(payload['submit_cta']['selection'],address_line='Flat 12, Demo House, Example Road')
+                    await ctx.send(target,chat_message(envelope(json.dumps(selected))))
                 elif kind=="review":
                     steps.append("replacement_approval" if state["replacement"] else "approval")
                     await ctx.send(target,chat_message(envelope(json.dumps(payload["approve_cta"]["selection"]))))
@@ -93,7 +102,8 @@ async def smoke(service="ac"):
             slot=(datetime.fromisoformat(slot)+timedelta(days=1)).isoformat()
             package=SERVICES[service].get("package",SERVICES[service]["label"])
             details={"sofa_cleaning":" 3 seats fabric", "washing_machine":" front-loading not spinning", "furniture":" two flat-pack chairs instructions available", "mattress_cleaning":" two queen mattresses", "carpet_cleaning":" synthetic 8 by 6 feet", "refrigerator":" double-door not cooling", "water_purifier":" RO+UV routine maintenance"}.get(service,"")
-            await ctx.send(target,chat_message(envelope(package+details+" in Indiranagar Bengaluru "+slot+" under INR 5000")))
+            place=' in Powai Mumbai PIN 400076 ' if nationwide else ' in Indiranagar Bengaluru '
+            await ctx.send(target,chat_message(envelope(package+details+place+slot+" under INR 5000")))
 
         bureau.add(probe)
         # Agent.setup runs actual handlers and queues; no HTTP listener needed.
@@ -102,8 +112,9 @@ async def smoke(service="ac"):
         try:
             result=await asyncio.wait_for(finished,timeout=45)
             Path("artifacts").mkdir(exist_ok=True)
-            evidence_path("mesh-proof.json" if service=="ac" else "mesh-proof-"+service+".json").write_text(json.dumps(result,indent=2))
-            print(f"PASS real uAgent message flow ({service}):"," -> ".join(result["steps"]))
+            name='mesh-proof-nationwide-'+service+'.json' if nationwide else 'mesh-proof.json' if service=='ac' else 'mesh-proof-'+service+'.json'
+            evidence_path(name).write_text(json.dumps(result,indent=2))
+            print(f"PASS real uAgent message flow ({service}{' Mumbai' if nationwide else ''}):"," -> ".join(result["steps"]))
             return result
         finally:
             pending=[t for t in asyncio.all_tasks() if t is not asyncio.current_task()]

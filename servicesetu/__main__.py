@@ -29,6 +29,12 @@ async def demo():
         transcript=[]
         async def say(text):
             reply=await conversation.handle(owner,text,bus)
+            payload=json.loads(reply.get('metadata',{}).get('card_payload','{}'))
+            address_action=payload.get('submit_cta',{}).get('selection',{})
+            if address_action.get('action')=='set_address':
+                transcript.append({'customer':text,'agent':reply})
+                text=json.dumps(dict(address_action,address_line='Flat 12, Demo House, Example Road'))
+                reply=await conversation.handle(owner,text,bus)
             transcript.append({"customer":text,"agent":reply})
             print("\nCUSTOMER:",text)
             print("SERVICESETU:",reply["text"])
@@ -82,6 +88,7 @@ def prove(include_mesh=True):
             from .mesh_smoke import smoke
             for service in ("ac","cleaning","electrical","kitchen_cleaning","sofa_cleaning","washing_machine","furniture","mattress_cleaning","carpet_cleaning","refrigerator","water_purifier"):
                 asyncio.run(smoke(service))
+            for service in ('ac','sofa_cleaning'):asyncio.run(smoke(service,nationwide=True))
             report["mesh"]="passed"
         elif result.wasSuccessful() and include_mesh:
             print("Mesh proof not run: install the fetch extras and use .venv/bin/python.")
@@ -99,9 +106,10 @@ def main():
     parser.add_argument("--expanded",action="store_true",help="Include bathroom cleaning and electrical inspection providers in a NEW demo database")
     parser.add_argument("--full-catalogue",action="store_true",help="Include all eight service packages in a NEW demo database")
     parser.add_argument("--extended-catalogue",action="store_true",help="Include twelve service packages using the same sixteen provider identities")
+    parser.add_argument('--nationwide-demo',action='store_true',help='Opt into fictional Bengaluru/Mumbai branches in a new twelve-package demo copy')
     parser.add_argument("--from-db",help="Copy an existing demo with SQLite backup before adding the full catalogue; original remains unchanged")
     args=parser.parse_args()
-    if args.command!="seed-demo" and (args.db is not None or args.days is not None or args.expanded or args.full_catalogue or args.extended_catalogue or args.from_db):
+    if args.command!="seed-demo" and (args.db is not None or args.days is not None or args.expanded or args.full_catalogue or args.extended_catalogue or args.nationwide_demo or args.from_db):
         parser.error("Demo seed options are only supported with seed-demo; use SERVICESETU_DB for the runtime")
     if args.command=="seed-demo":
         if not args.db: parser.error("seed-demo requires --db with a new database path")
@@ -109,14 +117,14 @@ def main():
         if path.exists(): parser.error("Database already exists; choose a new path to preserve saved bookings")
         if args.from_db:
             source=Path(args.from_db)
-            if not (args.full_catalogue or args.extended_catalogue) or not source.is_file():
+            if not (args.full_catalogue or args.extended_catalogue or args.nationwide_demo) or not source.is_file():
                 parser.error("--from-db requires a catalogue option and an existing source demo database")
             path.parent.mkdir(parents=True,exist_ok=True)
             with closing(sqlite3.connect(source.resolve().as_uri()+"?mode=ro",uri=True)) as original:
                 with closing(sqlite3.connect(path)) as destination: original.backup(destination)
         store=Store(path)
-        store.seed(days=args.days or 3,expanded=args.expanded,full_catalogue=args.full_catalogue,extended_catalogue=args.extended_catalogue)
-        if args.from_db:store.extend_demo_offerings(extended_catalogue=args.extended_catalogue)
+        store.seed(days=args.days or 3,expanded=args.expanded,full_catalogue=args.full_catalogue,extended_catalogue=args.extended_catalogue,nationwide_demo=args.nationwide_demo)
+        if args.from_db:store.extend_demo_offerings(extended_catalogue=args.extended_catalogue or args.nationwide_demo)
         print("Created fictional demo appointments in",path)
         for slot in store.provider("p1")["slots"]: print(slot)
         print("Existing databases, credentials and agent identities were not changed.")

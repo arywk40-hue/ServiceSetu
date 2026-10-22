@@ -1,3 +1,4 @@
+from tests.flows import with_address
 """New packages use the existing consequence and recovery boundaries."""
 import asyncio
 import json
@@ -28,7 +29,7 @@ class ExpandedServices(unittest.TestCase):
         self.bus=LocalBus(self.services)
 
     def send(self,text,owner='alice'):
-        return asyncio.run(self.conversation.handle(owner,text,self.bus))
+        return asyncio.run(with_address(self.conversation,owner,text,self.bus))
 
     def job(self,service):
         return dict(service=service,package=SERVICES[service]['package'],city='bengaluru',

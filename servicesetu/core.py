@@ -10,7 +10,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
 from zoneinfo import ZoneInfo
-from .locations import canonical
+from .locations import canonical,pin_code,country_code
+from .coverage import covers,location_key,DEMO_REGIONS
+from .addresses import validate_address
 from .catalogue import SERVICES,CLEANING_OFFERINGS,EXTENDED_OFFERINGS,unavailable_message,provider_services,provider_amount,quote_scope
 from .service_details import validate_details
 
@@ -134,10 +136,11 @@ class Store:
                 return p
         raise Rejected("Unknown provider")
 
-    def seed(self, days=1, expanded=False, full_catalogue=False, extended_catalogue=False):
+    def seed(self, days=1, expanded=False, full_catalogue=False, extended_catalogue=False, nationwide_demo=False):
         """Six default or twelve expanded fictional providers; mock registry."""
         if not isinstance(days,int) or isinstance(days,bool) or not 1<=days<=14:
             raise Rejected("Demo days must be a whole number from 1 to 14")
+        extended_catalogue=extended_catalogue or nationwide_demo
         full_catalogue=full_catalogue or extended_catalogue
         now = datetime.fromtimestamp(self.clock(), timezone.utc)
         dates=[(now.astimezone(ZoneInfo("Asia/Kolkata"))+timedelta(days=offset)).date().isoformat()
@@ -167,6 +170,7 @@ class Store:
             if i in (14,15): p["assembly_surcharge"]=0 if i==14 else 10000
             with self.tx() as db:
                 db.execute("INSERT OR IGNORE INTO providers VALUES(?,?)", (p["id"], encode(p)))
+        if nationwide_demo:self.enable_demo_coverage()
 
     def extend_demo_offerings(self,extended_catalogue=False):
         """Explicit demo-copy upgrade; retain prices, capacity and existing history."""
@@ -183,6 +187,16 @@ class Store:
                 provider.setdefault("offerings",{})
                 for service,amount in offerings.items():provider["offerings"].setdefault(service,amount)
                 db.execute("UPDATE providers SET payload=? WHERE id=?",(encode(provider),pid))
+
+    def enable_demo_coverage(self):
+        """Opt-in fictional branches in a demo copy; existing declarations win."""
+        with self.tx() as db:
+            for row in db.execute('SELECT id,payload FROM providers').fetchall():
+                provider=json.loads(row['payload'])
+                if 'coverage' in provider or provider.get('credential',{}).get('verifier')!='demo-verification-agent':continue
+                if canonical(provider.get('city'),'city')!='bengaluru' or canonical(provider.get('area'),'area')!='indiranagar':continue
+                provider['coverage']=DEMO_REGIONS
+                db.execute('UPDATE providers SET payload=? WHERE id=?',(encode(provider),row['id']))
 
     def trust(self, p, slot):
         # End-of-day expiry must cover the appointment's local calendar day.
@@ -206,13 +220,15 @@ class Store:
             raise Rejected("Confirm the service package: "+package)
         try: details=validate_details(job["service"],job.get("details",{}))
         except ValueError as exc: raise Rejected(str(exc)) from None
-        city=job.get("city","bengaluru")
+        city=job.get("city")
         area=job.get("area","")
         if not isinstance(city,str) or not isinstance(area,str):
             raise Rejected("City and area must be text")
         city,area=canonical(city,"city"),canonical(area,"area")
-        if city!="bengaluru" or area!="indiranagar":
-            raise Rejected("Demo covers Indiranagar, Bengaluru only")
+        if not city or not area:raise Rejected("Provide a city and locality in India")
+        if country_code(job.get("country"))!='IN':raise Rejected("Provide a service location in India")
+        pin=pin_code(job['pincode']) if job.get('pincode') is not None else None
+        if job.get('pincode') is not None and pin is None:raise Rejected("Provide a six-digit Indian PIN code")
         try:
             dt=datetime.fromisoformat(job["slot"])
             if dt.tzinfo is None or dt.timestamp()<=self.clock(): raise ValueError
@@ -220,7 +236,7 @@ class Store:
             if not isinstance(budget,int) or isinstance(budget,bool) or budget<=0: raise ValueError
         except (ValueError,TypeError,KeyError,OverflowError):
             raise Rejected("Provide a future timezone-qualified slot and a positive whole-paise budget") from None
-        return {"service":job["service"],**({"package":package} if package else {}),**({"details":details} if details else {}),"city":city.lower(),"area":area.lower(),
+        return {"service":job["service"],**({"package":package} if package else {}),**({"details":details} if details else {}),**({'pincode':pin} if pin else {}),**({'country':'IN'} if job.get('country') else {}),"city":city.lower(),"area":area.lower(),
                 "slot":dt.astimezone(ZoneInfo("Asia/Kolkata")).isoformat(timespec="seconds"),"budget":budget}
 
     def match(self, job):
@@ -233,7 +249,8 @@ class Store:
             amount=provider_amount(p,job["service"],job.get("details",{}))
             trust = self.trust(p, slot)
             reason = None
-            if not trust["eligible"]: reason = "Credential expired before the service date"
+            if not covers(p,job):reason="Outside this provider's declared service coverage"
+            elif not trust["eligible"]: reason = "Credential expired before the service date"
             elif not p["available"] or slot not in p["slots"]: reason = "Provider has no matching slot"
             elif not self.slot_free(p["id"],slot): reason = "Slot already reserved"
             elif amount > budget: reason = "Above your budget"
@@ -245,7 +262,7 @@ class Store:
     def available_slots(self, job, limit=4):
         """Read-only suggestions; never change a request or reserve capacity."""
         job = self.normalize_job(job)
-        slots = {slot for p in self.providers() if job["service"] in provider_services(p) for slot in p["slots"]}
+        slots = {slot for p in self.providers() if job["service"] in provider_services(p) and covers(p,job) for slot in p["slots"]}
         options = []
         for slot in sorted(slots, key=lambda value: datetime.fromisoformat(value).timestamp()):
             if slot == job["slot"] or datetime.fromisoformat(slot).timestamp() <= self.clock():
@@ -258,11 +275,11 @@ class Store:
                 break
         return options
 
-    def quote(self, owner, provider, slot, previous=None, job=None):
+    def quote(self, owner, provider, slot, previous=None, job=None, address_required=False):
         p = self.provider(provider)
         if job is not None:
             job=self.normalize_job(job)
-            if job["slot"]!=slot or job["service"] not in provider_services(p):
+            if job["slot"]!=slot or job["service"] not in provider_services(p) or not covers(p,job):
                 raise Rejected("Provider quote does not match the service request")
         service=job["service"] if job else p["service"]
         if job is None and service in ("washing_machine","furniture"):
@@ -290,6 +307,8 @@ class Store:
             payload = {"id": qid, "provider": provider, "name": p["name"], "slot": slot,
                 "owner": owner, "version": version, "amount": amount, "currency": "INR",
                 "service":service,**({"details":details} if details else {}),
+                **({'address_required':True} if address_required else {}),
+                "location":{field:job[field] for field in ('city','area','pincode','country') if field in job} if job else {'city':p['city'],'area':p['area']},
                 "kind": "fixed", "scope": quote_scope(service,details),
                 "exclusions": SERVICES[service]["exclusions"],
                 "cancellation": "Demo: full test-payment reversal before work starts",
@@ -324,7 +343,21 @@ class Store:
             self.event(db,bid,"booking_requested",owner,job=job)
         return self.booking(bid,owner)
 
-    def hold(self, owner, qid, recovery_of=None, request_id=None):
+    def validate_recovery(self,owner,bid,slot,service,details,location,budget=None,amount=None):
+        old=self.booking(bid,owner)
+        if old['state']!='cancelled':raise Rejected('Recovery starts only after cancellation')
+        quote=self.get_quote(old['quote'],owner)
+        provider=self.provider(old['provider'])
+        original_location=quote.get('location',{'city':provider['city'],'area':provider['area']})
+        if slot!=quote['slot'] or service!=quote.get('service',provider['service']) or details!=quote.get('details',{}) or location_key(location)!=location_key(original_location):
+            raise Rejected('A replacement must keep the original location, appointment and service scope; start a new request to change them')
+        with self.connect() as db:
+            row=db.execute("SELECT payload FROM events WHERE entity=? AND kind='booking_requested' ORDER BY seq LIMIT 1",(bid,)).fetchone()
+        maximum=json.loads(row[0]).get('job',{}).get('budget') if row else None
+        if maximum is not None and any(value is not None and value>maximum for value in (budget,amount)):
+            raise Rejected('A replacement must stay within the original requested budget')
+
+    def hold(self, owner, qid, recovery_of=None, request_id=None, address=None):
         bid = request_id or ident("b")
         with self.tx() as db:
             self.expire(db)
@@ -332,6 +365,15 @@ class Store:
             if not q: raise Rejected("Quote not found in this conversation")
             if q["expires"] <= self.clock(): raise Rejected("Quote and availability expired; request fresh alternatives")
             p = self.provider(q["provider"])
+            location=json.loads(q['payload']).get('location',{'city':p['city'],'area':p['area']})
+            saved_address=None
+            if address is not None or json.loads(q['payload']).get('address_required'):
+                try:saved_address=validate_address(address,location)
+                except ValueError as exc:raise Rejected(str(exc)) from None
+                if recovery_of:
+                    original=self.booking(recovery_of,owner).get('service_address')
+                    if original and saved_address!=original:raise Rejected('A replacement must keep the original service address; start a new request to change it')
+            if not covers(p,location):raise Rejected("Provider no longer covers this location; request a fresh quote")
             quoted_service=json.loads(q["payload"]).get("service",p["service"])
             if quoted_service not in provider_services(p): raise Rejected("Provider no longer offers this service; request a fresh quote")
             if not p["available"] or q["slot"] not in p["slots"] or not self.trust(p,q["slot"])["eligible"]:
@@ -339,8 +381,14 @@ class Store:
             if recovery_of:
                 old = db.execute("SELECT * FROM bookings WHERE id=? AND owner=? AND state='cancelled'", (recovery_of,owner)).fetchone()
                 if not old: raise Rejected("Recovery must reference your cancelled booking")
+                payload=json.loads(q['payload'])
+                self.validate_recovery(owner,recovery_of,q['slot'],quoted_service,payload.get('details',{}),location,amount=q['amount'])
             existing = db.execute("SELECT id FROM bookings WHERE owner=? AND quote=? AND state='held'", (owner,qid)).fetchone()
-            if existing: return self.booking(existing["id"],owner)
+            if existing:
+                held=self.booking(existing['id'],owner)
+                if saved_address and held.get('service_address')!=saved_address:
+                    raise Rejected("Use 'change address' to release this hold and review a different address")
+                return held
             if request_id:
                 intent=db.execute("SELECT * FROM bookings WHERE id=? AND owner=? AND state='requested'",(request_id,owner)).fetchone()
                 if not intent: raise Rejected("Booking request is not open in this conversation")
@@ -353,18 +401,25 @@ class Store:
             except sqlite3.IntegrityError:
                 raise Rejected("Slot already reserved; choose a fresh alternative") from None
             self.event(db, bid, "slot_held", owner, quote=qid, hold_until=min(q["expires"],self.clock()+120), recovery_of=recovery_of)
+            if saved_address:self.event(db,bid,'service_address_recorded',owner,address=saved_address)
         return self.booking(bid,owner)
 
     def booking(self, bid, owner):
         with self.connect() as db:
             row = db.execute("SELECT * FROM bookings WHERE id=? AND owner=?", (bid,owner)).fetchone()
         if not row: raise Rejected("Booking not found in this conversation")
-        return dict(row)
+        result=dict(row)
+        with self.connect() as db:
+            address=db.execute("SELECT payload FROM events WHERE entity=? AND kind='service_address_recorded' ORDER BY seq DESC LIMIT 1",(bid,)).fetchone()
+        if address:result['service_address']=json.loads(address[0])['address']
+        return result
 
     def approve(self, owner, bid, qid):
         with self.tx() as db:
             b = db.execute("SELECT * FROM bookings WHERE id=? AND owner=?", (bid,owner)).fetchone()
             if not b or b["quote"] != qid: raise Rejected("Approval does not match the held quote")
+            if self.get_quote(qid,owner).get('address_required') and not self.booking(bid,owner).get('service_address'):
+                raise Rejected('A service address is required before approval')
             if b["state"] != "held" or b["hold_until"] <= self.clock(): raise Rejected("Hold expired; refresh before approving")
             db.execute("UPDATE bookings SET approved=1 WHERE id=?", (bid,))
             self.event(db,bid,"customer_approved",owner,quote=qid)
@@ -373,6 +428,8 @@ class Store:
         with self.tx() as db:
             b = db.execute("SELECT * FROM bookings WHERE id=? AND owner=?", (bid,owner)).fetchone()
             if not b or not b["approved"]: raise Rejected("Explicit customer approval required before payment")
+            if self.get_quote(b['quote'],owner).get('address_required') and not self.booking(bid,owner).get('service_address'):
+                raise Rejected('A service address is required before payment')
             old = db.execute("SELECT * FROM payments WHERE idem=? OR booking=?", (idem,bid)).fetchone()
             if old:
                 if old["booking"] != bid or old["idem"] != idem: raise Rejected("Idempotency key conflict")
@@ -380,6 +437,8 @@ class Store:
             if b["state"] != "held" or b["hold_until"] <= self.clock(): raise Rejected("Hold expired before payment")
             q = db.execute("SELECT * FROM quotes WHERE id=?",(b["quote"],)).fetchone()
             provider=self.provider(b["provider"])
+            location=json.loads(q['payload']).get('location',{'city':provider['city'],'area':provider['area']})
+            if not covers(provider,location):raise Rejected("Provider no longer covers this location; no payment started")
             if json.loads(q["payload"]).get("service",provider["service"]) not in provider_services(provider):
                 raise Rejected("Provider no longer offers this service; no payment started")
             if q["expires"] <= self.clock() or not self.trust(self.provider(b["provider"]),b["slot"])["eligible"]:
@@ -476,6 +535,8 @@ class Store:
     def recovery(self, owner, bid, job):
         old = self.booking(bid,owner)
         if old["state"] != "cancelled": raise Rejected("Recovery starts only after cancellation")
+        job=self.normalize_job(job)
+        self.validate_recovery(owner,bid,job['slot'],job['service'],job.get('details',{}),job,budget=job['budget'])
         choices, excluded = self.match(job)
         choices = [p for p in choices if p["id"] != old["provider"]]
         # Every replacement receives a fresh review card; never silently transfer approval.
