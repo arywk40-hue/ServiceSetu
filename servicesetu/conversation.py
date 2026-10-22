@@ -6,7 +6,8 @@ from .core import Rejected
 from . import cards
 from .reasoning import Reasoner,rupees
 from .locations import clean_context,resolve,location_only
-from .catalogue import SERVICES,catalogue_text,unavailable_message,package_from_text
+from .catalogue import SERVICES,CATEGORIES,unavailable_message,package_from_text,detect_service
+from .service_details import FIELDS,extract_details,validate_details,next_question
 
 
 def strip_recipient(text, address=None):
@@ -42,7 +43,7 @@ def selection(text):
         return {"action":"select","quote_id":q.group()}
     if low=="reject": return {"action":"reject"}
     if re.search(r"\bsearch\b",low) and "budget_rupees" in low:
-        service=re.search(r"\bservice\s*(?:(?:is|=|:)\s*)?[\"']?(ac|plumbing|cleaning|electrical)\b",low)
+        service=re.search(r"\bservice\s*(?:(?:is|=|:)\s*)?[\"']?(ac|plumbing|cleaning|electrical|kitchen_cleaning|sofa_cleaning|washing_machine|furniture|mattress_cleaning|carpet_cleaning|refrigerator|water_purifier)\b",low)
         area=re.search(r"\barea\s*(?:(?:is|=|:)\s*)?[\"']?(indiranagar)\b",low)
         slot=re.search(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?(?:[+-]\d{2}:\d{2}|Z)",text)
         budget=re.search(r"\bbudget_rupees\s*[\"']?\s*(?:(?:is|=|:)\s*)?(\d+(?:\.\d{1,2})?)",low)
@@ -55,6 +56,34 @@ class Conversation:
     def __init__(self,store,reasoner=None):
         self.store=store
         self.reasoner=reasoner or Reasoner()
+
+    def details_check(self,owner,state,partial):
+        service=partial.get("service")
+        details=partial.get("details",{})
+        question=None
+        pending=None
+        for key in FIELDS.get(service,{}):
+            if key in details:
+                try: validate_details(service,{key:details[key]},complete=False)
+                except ValueError as exc:
+                    pending,question=key,str(exc)
+                    break
+        if not question:
+            try:validate_details(service,details,complete=False)
+            except ValueError as exc:
+                pending=next(iter(FIELDS.get(service,{})),None)
+                question=str(exc)
+        if not question: pending,question=next_question(service,details)
+        if question:
+            state["partial_job"]=partial
+            state["pending_service_field"]=pending
+            state.pop("availability_options",None)
+            state.pop("availability_token",None)
+            for field in ("quotes","quote","approval_token"):state.pop(field,None)
+            self.store.save_session(owner,state)
+            return cards.envelope(question+"\n\nYour other request details are retained. No provider has been reserved or paid.")
+        state.pop("pending_service_field",None)
+        return None
 
     def location_check(self, owner, state, partial, text=""):
         partial, proposal, unsupported = resolve(partial,text)
@@ -88,10 +117,10 @@ class Conversation:
             try:
                 trust=await bus.call("verification","check",owner,provider=pid,slot=job["slot"])
                 if not trust["eligible"]: continue
-                q=await bus.call("provider:"+pid,"quote",owner,slot=job["slot"])
+                q=await bus.call("provider:"+pid,"quote",owner,slot=job["slot"],job=job)
                 # Validate worker evidence against deterministic requirements.
                 canonical=self.store.get_quote(q["id"],owner)
-                if canonical["provider"]!=pid or canonical["slot"]!=job["slot"] or canonical["amount"]>job["budget"]:
+                if canonical["provider"]!=pid or canonical["slot"]!=job["slot"] or canonical["amount"]>job["budget"] or canonical.get("service")!=job["service"] or canonical.get("details",{})!=job.get("details",{}):
                     raise Rejected("Provider quote violates request limits")
                 quotes.append(canonical)
             except (Rejected,TimeoutError):
@@ -123,14 +152,40 @@ class Conversation:
         low=text.lower()
         try:
             if low.strip(" ?.! ") in ("services","what services do you offer","available services","show services"):
-                return cards.envelope(catalogue_text(self.store.providers()))
+                return cards.service_menu(self.store.providers())
+            groups={"show cleaning services":"cleaning","show appliance services":"appliances","show repair services":"repairs","show assembly services":"assembly"}
+            if low.strip(" ?.! ") in groups:
+                return cards.service_menu(self.store.providers(),groups[low.strip(" ?.! ")])
+            if action=="choose_category":
+                category=picked.get("category")
+                if not isinstance(category,str) or category not in CATEGORIES:raise Rejected("Choose a listed service group")
+                return cards.service_menu(self.store.providers(),category)
+            if action=="choose_service":
+                service=picked.get("service")
+                if not isinstance(service,str) or service not in SERVICES: raise Rejected("Choose a listed service")
+                partial={"service":service,"details":{}}
+                if SERVICES[service].get("package"): partial["package"]=SERVICES[service]["package"]
+                state["partial_job"]=partial
+                for field in ("pending_location","pending_service_field","availability_options","availability_token","quotes","quote","approval_token"):
+                    state.pop(field,None)
+                self.store.save_session(owner,state)
+                return self.details_check(owner,state,partial) or cards.clarification(partial)
             option_match=re.fullmatch(r"(?:option\s+)?([1-4])",low)
-            if not action and option_match and state.get("availability_options"):
+            partial=state.get("partial_job")
+            if not action and option_match and partial and low.startswith("option"):
+                return self.details_check(owner,state,partial) or cards.clarification(partial)
+            if not action and option_match and not partial and state.get("availability_options"):
                 picked={"action":"choose_time","option":int(option_match.group(1)),"availability_token":state.get("availability_token")}
                 action="choose_time"
-            elif not action and option_match and state.get("quotes"):
+            elif not action and option_match and not partial and state.get("quotes"):
                 index=int(option_match.group(1))-1
-                if index>=len(state["quotes"]): raise Rejected("Choose a provider from the current shortlist")
+                if index>=len(state["quotes"]):
+                    quotes=[self.store.get_quote(qid,owner) for qid in state["quotes"]]
+                    fresh=[quote for quote in quotes if quote["expires"]>self.store.clock()]
+                    if len(fresh)!=len(quotes): return cards.envelope("The previous provider quotes have expired. Send a fresh service request to see current options. No booking or payment was made.")
+                    reply=cards.shortlist(quotes,[])
+                    reply["text"]=f"Only {len(quotes)} provider option(s) are available in this shortlist. Choose one below.\n\n"+reply["text"]
+                    return reply
                 picked={"action":"select","quote_id":state["quotes"][index]}
                 action="select"
             if action=="choose_time":
@@ -148,6 +203,9 @@ class Conversation:
                 # The form labels explicitly name each bounded service package.
                 package=SERVICES.get(job["service"],{}).get("package")
                 if package: job["package"]=package
+                job["details"]={key:picked[key] for key in FIELDS.get(job["service"],{}) if key in picked}
+                detail_reply=self.details_check(owner,state,job)
+                if detail_reply: return detail_reply
                 if isinstance(job["slot"],str) and not re.match(r"^\d{4}-\d{2}-\d{2}T",job["slot"]):
                     parsed=await self.reasoner.parse(job["slot"],self.store.clock())
                     job["slot"]=parsed.get("slot")
@@ -160,6 +218,8 @@ class Conversation:
                     await bus.call("payment","cancel",owner,booking=state["booking"])
                 return await self.quotes(bus,owner,job)
             if action=="select":
+                if state.get("partial_job"):
+                    return self.details_check(owner,state,state["partial_job"]) or cards.clarification(state["partial_job"])
                 qid=picked.get("quote_id")
                 if qid not in state.get("quotes",[]): raise Rejected("Select a quote from this conversation's current shortlist")
                 if state.get("booking"):
@@ -221,6 +281,9 @@ class Conversation:
                 return cards.job_form(self.store.providers()[0]["slots"][0])
             # Parsing is permitted only for intake. Model output cannot authorize payment.
             partial=clean_context(state.get("partial_job",{}))
+            for field in ("quotes","quote","approval_token","availability_options","availability_token"):
+                state.pop(field,None)
+            self.store.save_session(owner,state)
             confirmation=re.sub(r"[,.!]+"," ",low).strip()
             confirmation=" ".join(confirmation.split())
             if state.get("pending_location") and confirmation in ("yes","yes please","correct","that's right","yes that's right","yes correct","yes that's correct"):
@@ -231,16 +294,28 @@ class Conversation:
                 self.store.save_session(owner,state)
                 return cards.envelope("Please tell me the correct area and city. This demo currently serves Indiranagar in Bengaluru only. Your other request details are retained.")
             else:
-                job=await self.reasoner.parse(text,self.store.clock(),partial)
+                pending=state.get("pending_service_field")
+                detail_answer=extract_details(partial.get("service"),text,pending) if pending else {}
+                if detail_answer and len(text.split())<=5 and detect_service(text) is None and not re.search(r"\d{4}-|\b(today|tomorrow|budget|under|inr|bangalore|bengaluru|indiranagar)\b",low):
+                    # A short answer to a typed question must not reinterpret the budget or date.
+                    job={}
+                else:
+                    job=await self.reasoner.parse(text,self.store.clock(),partial)
                 if location_only(text):
                     job={field:job.get(field) for field in ("city","area")}
             if job.get("requested_day") and not job.get("slot") and partial.get("slot") and partial["slot"][:10]!=job["requested_day"]:
                 partial.pop("slot",None)
+            explicit_service=detect_service(text)
+            if explicit_service:job["service"]=explicit_service
             partial.update({k:v for k,v in job.items() if v is not None})
             if isinstance(partial.get("service"),str): partial["service"]=partial["service"].strip().casefold()
             if partial.get("service") and (not isinstance(partial["service"],str) or not SERVICES.get(partial["service"],{}).get("bookable")):
                 raise Rejected(unavailable_message(partial["service"]))
             definition=SERVICES.get(partial.get("service"),{})
+            previous=state.get("partial_job",{})
+            same_service=previous.get("service")==partial.get("service")
+            partial["details"]=dict(previous.get("details",{})) if same_service else {}
+            partial["details"].update(extract_details(partial.get("service"),text,state.get("pending_service_field") if same_service else None))
             package=definition.get("package")
             if package:
                 # Only explicit customer package wording is sufficient, never a model guess.
@@ -251,6 +326,8 @@ class Conversation:
                     state["partial_job"]=partial
                     self.store.save_session(owner,state)
                     return cards.envelope(f"The available demo package is **{package}**.\n\nIncludes: {definition['scope']}.\n\nExcluded: {definition['exclusions']}.\n\nIf this fits your request, reply '{package}'. This chooses the package only; provider selection and payment approval come later.")
+            detail_reply=self.details_check(owner,state,partial)
+            if detail_reply: return detail_reply
             partial,location_reply=self.location_check(owner,state,partial,text)
             if location_reply: return location_reply
             if not all(partial.get(k) is not None for k in ("service","city","area","slot","budget")):

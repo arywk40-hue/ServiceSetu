@@ -107,7 +107,7 @@ class Intake(unittest.TestCase):
             await conv.handle("alice:chat","AC service in Indiranagar Bengaluru tomorrow 10am under INR 1000",bus)
             intent=self.store.session("alice:chat")["intent"]
             reply=await conv.handle("alice:chat","I need surgery in Mumbai",bus)
-            self.assertIn("supports AC servicing, plumbing, bathroom cleaning and electrical inspection only",reply["text"])
+            self.assertIn("supports these services",reply["text"])
             self.assertEqual(self.store.session("alice:chat")["intent"],intent)
         asyncio.run(scenario())
 

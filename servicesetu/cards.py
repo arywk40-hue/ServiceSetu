@@ -4,7 +4,30 @@ import re
 from datetime import datetime, timezone
 from uuid import uuid4
 from zoneinfo import ZoneInfo
-from .catalogue import SERVICES
+from .catalogue import SERVICES,CATEGORIES,catalogue_text,provider_services
+
+
+def service_menu(providers,category=None):
+    items=[]
+    if category is None:
+        labels={"cleaning":"Cleaning","appliances":"Appliance care","repairs":"Home repairs","assembly":"Furniture assembly"}
+        for group,keys in CATEGORIES.items():
+            available=[key for key in keys if any(key in provider_services(p) for p in providers)]
+            if not available:continue
+            items.append({"id":group,"title":labels[group],"subtitle":", ".join(SERVICES[key]["label"] for key in available),
+                          "primary_cta":{"label":"Browse packages","selection":{"action":"choose_category","category":group}}})
+    else:
+        for key in CATEGORIES[category]:
+            definition=SERVICES[key]
+            count=sum(key in provider_services(p) for p in providers)
+            if not count: continue
+            items.append({"id":key,"title":definition.get("package",definition["label"]),
+                          "subtitle":definition["scope"],
+                          "primary_cta":{"label":"Choose service","selection":{"action":"choose_service","service":key}}})
+    text=catalogue_text(providers,category)
+    text+="\n\nBrowse a group: 'show cleaning services', 'show appliance services', 'show repair services' or 'show assembly services'."
+    if not items: return envelope(text)
+    return envelope(text,"carousel",{"title":"Choose a service group" if category is None else "Choose a service package","items":items})
 
 
 def envelope(text, kind=None, payload=None, terminal=False):
@@ -43,7 +66,7 @@ def appointment_label(slot):
 def clarification(partial):
     missing = []
     if not partial.get("service"):
-        missing.append("which service you need (AC servicing, plumbing, one-bathroom cleaning or electrical inspection)")
+        missing.append("which service you need (send 'show services' to browse the packages)")
     if not partial.get("area") or not partial.get("city"):
         missing.append("your area and city" if not partial.get("area") and not partial.get("city")
                        else "your area" if not partial.get("area") else "your city")

@@ -5,7 +5,7 @@ Customers can describe the request in normal language, for example:
 > My AC is not cooling. I am in Indiranagar, Bengaluru. Can someone come tomorrow at 10 AM, under INR 1,000?
 
 ASI1 extracts the service, location, appointment and budget into structured fields.
-The deterministic fallback supports AC/plumbing keywords, today/tomorrow,
+The deterministic fallback supports catalogue service keywords, today/tomorrow,
 explicit dates, AM/PM or 24-hour times and common INR budget formatting. It is a
 limited fallback, not a replacement for general language understanding.
 
@@ -13,7 +13,9 @@ Missing fields are requested explicitly. Partial intake details are retained
 within the same customer session, so a customer can reply with just `10 AM` or
 `under INR 1000`. Vague periods such as morning require an exact time rather than
 silently becoming a fixed appointment. Forms also accept ordinary day/time text.
-The initial scope remains AC servicing and plumbing in Indiranagar, Bengaluru.
+Coverage remains Indiranagar, Bengaluru. The active database determines which
+providers are available. See [full catalogue](full-catalogue.md) for package
+questions, explicit detail validation and grouped service browsing.
 
 Location matching ignores letter case and extra spaces; Bangalore and Bengaluru
 are the same supported city, and Indira Nagar normalizes to Indiranagar. Close

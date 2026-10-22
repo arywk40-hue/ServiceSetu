@@ -1,5 +1,9 @@
 # Expanded demo services
 
+For the eight-package demo with kitchen, sofa, washing-machine and furniture
+packages, see [full catalogue](full-catalogue.md). The instructions below retain
+the original four-category expanded demo.
+
 All providers, credentials and services below are fictional. Coverage remains Indiranagar, Bengaluru. Payments remain simulated or Stripe test payments.
 
 | Category | Fixed package | Demo prices |

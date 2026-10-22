@@ -19,7 +19,7 @@ class Services:
         if role=="verification" and action=="check":
             return s.trust(s.provider(data["provider"]),data["slot"])
         if role.startswith("provider:") and action=="quote":
-            return s.quote(owner,role.split(":",1)[1],data["slot"],data.get("previous"))
+            return s.quote(owner,role.split(":",1)[1],data["slot"],data.get("previous"),job=data.get("job"))
         if role=="booking":
             if action=="request": return s.request(owner,data["job"])
             if action=="hold": return s.hold(owner,data["quote"],data.get("recovery_of"),data.get("request_id"))

@@ -11,7 +11,8 @@ from pathlib import Path
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 from .locations import canonical
-from .catalogue import SERVICES,unavailable_message
+from .catalogue import SERVICES,CLEANING_OFFERINGS,EXTENDED_OFFERINGS,unavailable_message,provider_services,provider_amount,quote_scope
+from .service_details import validate_details
 
 
 class Rejected(ValueError):
@@ -133,31 +134,55 @@ class Store:
                 return p
         raise Rejected("Unknown provider")
 
-    def seed(self, days=1, expanded=False):
+    def seed(self, days=1, expanded=False, full_catalogue=False, extended_catalogue=False):
         """Six default or twelve expanded fictional providers; mock registry."""
         if not isinstance(days,int) or isinstance(days,bool) or not 1<=days<=14:
             raise Rejected("Demo days must be a whole number from 1 to 14")
+        full_catalogue=full_catalogue or extended_catalogue
         now = datetime.fromtimestamp(self.clock(), timezone.utc)
         dates=[(now.astimezone(ZoneInfo("Asia/Kolkata"))+timedelta(days=offset)).date().isoformat()
                for offset in range(1,days+1)]
         names = ["CoolCare AC", "Breeze AC", "Lapsed AC", "FlowFix Plumbing", "TapCare Plumbing", "Renewal Plumbing"]
-        if expanded:
+        if expanded or full_catalogue:
             names += ["FreshNest Cleaning", "SparkleSpace Cleaning", "Lapsed Cleaning",
                       "CircuitCheck Electrical", "BrightWire Electrical", "Lapsed Electrical"]
+        if full_catalogue:
+            names += ["SpinCheck Appliances","DrumCare Appliances","AssemblyWorks","BuildBuddy Assembly"]
         for i, name in enumerate(names):
-            service = ("ac","plumbing","cleaning","electrical")[i//3]
+            service = ("ac","plumbing","cleaning","electrical")[i//3] if i<12 else "washing_machine" if i<14 else "furniture"
             expiry = (now + timedelta(days=-1 if i in (2,8,11) else 1 if i == 5 else 90)).date().isoformat()
             p = {"id": f"p{i+1}", "name": name, "service": service, "city": "bengaluru",
-                 "area": "indiranagar", "amount": [69900, 74900, 59900, 49900, 54900, 45900,79900,89900,59900,39900,49900,29900][i],
+                 "area": "indiranagar", "amount": [69900, 74900, 59900, 49900, 54900, 45900,79900,89900,59900,39900,49900,29900,44900,54900,34900,44900][i],
                  "slots": [f"{day}T{hour}:00:00+05:30" for day in dates for hour in ("10","14")],
                  "credential": {"type": "demo_skill_certificate", "jurisdiction": "IN-demo",
-                  "issuer": "Mock Service Registry", "status": "provider_supplied" if i%3==1 else "verified",
-                  "source": "seeded provider upload" if i%3==1 else "mock-registry://servicesetu",
+                  "issuer": "Mock Service Registry", "status": "provider_supplied" if i in (1,4,7,10,13,15) else "verified",
+                  "source": "seeded provider upload" if i in (1,4,7,10,13,15) else "mock-registry://servicesetu",
                   "checked_at": now.isoformat(), "expires": expiry, "method": "mock_lookup",
                   "verifier": "demo-verification-agent", "policy_version": "IN-demo-v1"},
                  "available": True}
+            if full_catalogue and i in (6,7,8):
+                p["offerings"]=dict(CLEANING_OFFERINGS[p["id"]])
+            if extended_catalogue and p["id"] in EXTENDED_OFFERINGS:
+                p.setdefault("offerings",{}).update(EXTENDED_OFFERINGS[p["id"]])
+            if i in (14,15): p["assembly_surcharge"]=0 if i==14 else 10000
             with self.tx() as db:
                 db.execute("INSERT OR IGNORE INTO providers VALUES(?,?)", (p["id"], encode(p)))
+
+    def extend_demo_offerings(self,extended_catalogue=False):
+        """Explicit demo-copy upgrade; retain prices, capacity and existing history."""
+        with self.tx() as db:
+            upgrades={pid:dict(offerings) for pid,offerings in CLEANING_OFFERINGS.items()}
+            if extended_catalogue:
+                for pid,offerings in EXTENDED_OFFERINGS.items():upgrades.setdefault(pid,{}).update(offerings)
+            for pid,offerings in upgrades.items():
+                row=db.execute("SELECT payload FROM providers WHERE id=?",(pid,)).fetchone()
+                if not row: continue
+                provider=json.loads(row[0])
+                expected="cleaning" if pid in CLEANING_OFFERINGS else "washing_machine"
+                if provider["service"]!=expected: continue
+                provider.setdefault("offerings",{})
+                for service,amount in offerings.items():provider["offerings"].setdefault(service,amount)
+                db.execute("UPDATE providers SET payload=? WHERE id=?",(encode(provider),pid))
 
     def trust(self, p, slot):
         # End-of-day expiry must cover the appointment's local calendar day.
@@ -179,6 +204,8 @@ class Store:
         package=SERVICES[job["service"]].get("package")
         if package and job.get("package")!=package:
             raise Rejected("Confirm the service package: "+package)
+        try: details=validate_details(job["service"],job.get("details",{}))
+        except ValueError as exc: raise Rejected(str(exc)) from None
         city=job.get("city","bengaluru")
         area=job.get("area","")
         if not isinstance(city,str) or not isinstance(area,str):
@@ -193,7 +220,7 @@ class Store:
             if not isinstance(budget,int) or isinstance(budget,bool) or budget<=0: raise ValueError
         except (ValueError,TypeError,KeyError,OverflowError):
             raise Rejected("Provide a future timezone-qualified slot and a positive whole-paise budget") from None
-        return {"service":job["service"],**({"package":package} if package else {}),"city":city.lower(),"area":area.lower(),
+        return {"service":job["service"],**({"package":package} if package else {}),**({"details":details} if details else {}),"city":city.lower(),"area":area.lower(),
                 "slot":dt.astimezone(ZoneInfo("Asia/Kolkata")).isoformat(timespec="seconds"),"budget":budget}
 
     def match(self, job):
@@ -201,23 +228,24 @@ class Store:
         slot,budget=job["slot"],job["budget"]
         selected, excluded = [], []
         for p in self.providers():
-            if p["service"] != job["service"]:
+            if job["service"] not in provider_services(p):
                 continue
+            amount=provider_amount(p,job["service"],job.get("details",{}))
             trust = self.trust(p, slot)
             reason = None
             if not trust["eligible"]: reason = "Credential expired before the service date"
             elif not p["available"] or slot not in p["slots"]: reason = "Provider has no matching slot"
             elif not self.slot_free(p["id"],slot): reason = "Slot already reserved"
-            elif p["amount"] > budget: reason = "Above your budget"
+            elif amount > budget: reason = "Above your budget"
             if reason: excluded.append({"provider": p["id"], "name": p["name"], "reason": reason})
-            else: selected.append(dict(p, trust=trust))
+            else: selected.append(dict(p, trust=trust,amount=amount))
         selected.sort(key=lambda p: (p["trust"]["status"] != "verified", p["amount"]))
         return selected, excluded
 
     def available_slots(self, job, limit=4):
         """Read-only suggestions; never change a request or reserve capacity."""
         job = self.normalize_job(job)
-        slots = {slot for p in self.providers() if p["service"] == job["service"] for slot in p["slots"]}
+        slots = {slot for p in self.providers() if job["service"] in provider_services(p) for slot in p["slots"]}
         options = []
         for slot in sorted(slots, key=lambda value: datetime.fromisoformat(value).timestamp()):
             if slot == job["slot"] or datetime.fromisoformat(slot).timestamp() <= self.clock():
@@ -230,8 +258,18 @@ class Store:
                 break
         return options
 
-    def quote(self, owner, provider, slot, previous=None):
+    def quote(self, owner, provider, slot, previous=None, job=None):
         p = self.provider(provider)
+        if job is not None:
+            job=self.normalize_job(job)
+            if job["slot"]!=slot or job["service"] not in provider_services(p):
+                raise Rejected("Provider quote does not match the service request")
+        service=job["service"] if job else p["service"]
+        if job is None and service in ("washing_machine","furniture"):
+            raise Rejected("A complete service request is required for this package")
+        details=job.get("details",{}) if job else {}
+        amount=provider_amount(p,service,details)
+        if job and amount>job["budget"]: raise Rejected("Provider quote exceeds your budget")
         if not self.trust(p, slot)["eligible"] or slot not in p["slots"] or not p["available"]:
             raise Rejected("Provider ineligible or slot unavailable")
         if not self.slot_free(provider,slot):
@@ -250,16 +288,17 @@ class Store:
                 if not old or old["provider"] != provider: raise Rejected("Invalid prior quote")
                 version = old["version"] + 1
             payload = {"id": qid, "provider": provider, "name": p["name"], "slot": slot,
-                "owner": owner, "version": version, "amount": p["amount"], "currency": "INR",
-                "kind": "fixed", "scope": SERVICES[p["service"]]["scope"],
-                "exclusions": SERVICES[p["service"]]["exclusions"],
+                "owner": owner, "version": version, "amount": amount, "currency": "INR",
+                "service":service,**({"details":details} if details else {}),
+                "kind": "fixed", "scope": quote_scope(service,details),
+                "exclusions": SERVICES[service]["exclusions"],
                 "cancellation": "Demo: full test-payment reversal before work starts",
                 "trust": self.trust(p, slot), "expires": self.clock()+300,
                 "availability": {"source": f"provider-agent:{provider}", "observed_at": self.clock(),
                     "expires": self.clock()+300, "confidence": "provider-confirmed demo", "hold_capable": True}}
             digest = hashlib.sha256(encode(payload).encode()).hexdigest()
             db.execute("INSERT INTO quotes VALUES(?,?,?,?,?,?,?,?,?,?)", (qid, provider, slot, owner, version,
-                       p["amount"], payload["expires"], encode(payload), digest, previous))
+                       amount, payload["expires"], encode(payload), digest, previous))
             self.event(db, qid, "quote_created", "provider:"+provider, digest=digest, quote=payload, previous=previous)
         return payload
 
@@ -293,6 +332,8 @@ class Store:
             if not q: raise Rejected("Quote not found in this conversation")
             if q["expires"] <= self.clock(): raise Rejected("Quote and availability expired; request fresh alternatives")
             p = self.provider(q["provider"])
+            quoted_service=json.loads(q["payload"]).get("service",p["service"])
+            if quoted_service not in provider_services(p): raise Rejected("Provider no longer offers this service; request a fresh quote")
             if not p["available"] or q["slot"] not in p["slots"] or not self.trust(p,q["slot"])["eligible"]:
                 raise Rejected("Final slot or credential revalidation failed")
             if recovery_of:
@@ -338,6 +379,9 @@ class Store:
                 return dict(old)
             if b["state"] != "held" or b["hold_until"] <= self.clock(): raise Rejected("Hold expired before payment")
             q = db.execute("SELECT * FROM quotes WHERE id=?",(b["quote"],)).fetchone()
+            provider=self.provider(b["provider"])
+            if json.loads(q["payload"]).get("service",provider["service"]) not in provider_services(provider):
+                raise Rejected("Provider no longer offers this service; no payment started")
             if q["expires"] <= self.clock() or not self.trust(self.provider(b["provider"]),b["slot"])["eligible"]:
                 raise Rejected("Quote or credential revalidation failed")
             pid = ident("pay")

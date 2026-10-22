@@ -7,7 +7,7 @@ Public hackathon repository: [arywk40-hue/ServiceSetu](https://github.com/arywk4
 
 Book a trusted local service, approve the exact price, and recover when the provider cancels — through one ASI:One conversation. ServiceSetu coordinates independent provider agents and keeps bookings and payments in deterministic code.
 
-**Prototype only:** six fictional providers by default, twelve in the expanded demo; Indiranagar, Bengaluru; AC servicing, plumbing, one-bathroom cleaning and electrical inspection; mock credential registry; simulated or Stripe **test** payments. No actual service, identity verification, real money, UPI integration, escrow or payout. “Verified” always refers to the mock registry. Provider-supplied documents are explicitly unverified.
+**Prototype only:** six fictional providers by default, twelve in the expanded demo, sixteen in the full catalogue; Indiranagar, Bengaluru; AC servicing, plumbing, bathroom/kitchen/sofa cleaning, electrical/washing-machine inspection and furniture assembly; mock credential registry; simulated or Stripe **test** payments. No actual service, identity verification, real money, UPI integration, escrow or payout. “Verified” always refers to the mock registry. Provider-supplied documents are explicitly unverified.
 
 ## Start in 30 seconds, no keys required
 
@@ -42,7 +42,7 @@ Seeded slots are tomorrow at 10:00 and 14:00 **Asia/Kolkata**, computed when a n
 
 For a fresh multi-day demo database, run `python -m servicesetu seed-demo --db data/demo-three-days.db --days 3`, then start the runtime with `SERVICESETU_DB` pointing to that file. This creates 10 AM and 2 PM appointments for each of the next three local dates. Existing files are refused rather than overwritten, and normal startup preserves their seeded slots. Credentials and agent identities remain unchanged.
 
-There are **eight role types**: seven specialists and one provider role type. The default demo has thirteen agent instances (six providers); the expanded demo has nineteen (twelve providers). Only Concierge is a customer chat entry point. The rest accept signed typed requests from Concierge.
+There are **eight role types**: seven specialists and one provider role type. The default demo has thirteen agent instances (six providers); the expanded demo has nineteen (twelve providers), and the full catalogue has twenty-three (sixteen providers). Only Concierge is a customer chat entry point. The rest accept signed typed requests from Concierge.
 
 | Name | Role | Instance/address |
 | --- | --- | --- |
@@ -153,7 +153,7 @@ One full command: `.venv/bin/python -m servicesetu prove`.
 | 10. Reconstruct booking history | `test_11`, actual mesh audit |
 | 11. Restricted actions gated | `test_12`, `test_13`, `test_17`, `test_18` |
 
-The suite contains **109 scenarios**, including seven gateway boundary checks using a Stripe SDK double, nine intake/card/lifecycle checks, three recovery-history checks, eight customer-history display checks, five evidence-output checks, thirteen availability/intake checks, eight customer-language checks, twelve location-correction checks, five multi-day demo checks, and reasoning-source checks that distinguish ASI1 from an offline fallback. Those checks prove binding and failure behavior locally; they do not claim a real test gateway transaction. Evidence is written to `artifacts/proof-results.json`, `artifacts/mesh-proof.json`, and `artifacts/demo-transcript.json`. All use synthetic customer data. SQLite transactions and a unique active-slot index own reservation; quotes and events reject updates/deletes. File owners can still alter the database directly: append-only application audit is not cryptographic tamper-proof evidence. Shared SQLite is for a **single-machine Bureau**, not independently hosted Agentverse containers.
+The suite contains **154 scenarios**, including seven gateway boundary checks using a Stripe SDK double, nine intake/card/lifecycle checks, three recovery-history checks, eight customer-history display checks, five evidence-output checks, thirteen availability/intake checks, eight customer-language checks, twelve location-correction checks, five multi-day demo checks, and reasoning-source checks that distinguish ASI1 from an offline fallback. Those checks prove binding and failure behavior locally; they do not claim a real test gateway transaction. Routine evidence is written under ignored `artifacts/local/`; published examples remain under `artifacts/`. All use synthetic customer data. SQLite transactions and a unique active-slot index own reservation; quotes and events reject updates/deletes. File owners can still alter the database directly: append-only application audit is not cryptographic tamper-proof evidence. Shared SQLite is for a **single-machine Bureau**, not independently hosted Agentverse containers.
 
 Two live integration checks have also passed:
 
@@ -182,3 +182,7 @@ No production Indian registry integration, legal assessment, real customer onboa
 - [ASI:One](https://asi1.ai), [Agentverse](https://agentverse.ai), [Stripe test dashboard](https://dashboard.stripe.com/test/apikeys).
 
 Service catalogue and expansion readiness, including expanded demo setup, package boundaries and reasoning deadlines, are described in [service expansion](docs/service-expansion.md).
+
+For all eight packages, quantity-based totals, grouped browsing and an upgrade that retains booking history, see [full catalogue](docs/full-catalogue.md).
+
+The optional [twelve-package catalogue](docs/twelve-package-catalogue.md) adds mattress/carpet cleaning, refrigerator inspection and purifier servicing using the same sixteen provider identities. Activate it with a new database and --extended-catalogue; existing demo modes remain available.

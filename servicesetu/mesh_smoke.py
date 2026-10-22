@@ -17,14 +17,14 @@ from .core import Store
 from .mesh import create_mesh,NoRegistration,OfflineAgent,CancelControl
 from .reasoning import Reasoner
 from .service import Services
-from .catalogue import SERVICES
+from .catalogue import SERVICES,provider_services
 
 
 async def smoke(service="ac"):
     with tempfile.TemporaryDirectory() as tmp:
         reasoner=Reasoner();reasoner.key=None
         store=Store(Path(tmp)/"mesh.db")
-        store.seed(expanded=service in ("cleaning","electrical"))
+        store.seed(expanded=service in ("cleaning","electrical"),full_catalogue=service in ("kitchen_cleaning","sofa_cleaning","washing_machine","furniture"),extended_catalogue=service in ("mattress_cleaning","carpet_cleaning","refrigerator","water_purifier"))
         bureau,agents,store=create_mesh(store,offline=True,reasoner=reasoner,payment_mode="mock")
         probe=OfflineAgent(name="ServiceSetu-Smoke-Customer",seed="servicesetu-public-smoke-customer",registration_policy=NoRegistration(),enable_agent_inspector=False,publish_agent_details=False)
         finished=asyncio.get_running_loop().create_future()
@@ -89,10 +89,11 @@ async def smoke(service="ac"):
 
         @probe.on_event("startup")
         async def start(ctx:Context):
-            slot=next(p for p in store.providers() if p["service"]==service)["slots"][0]
+            slot=next(p for p in store.providers() if service in provider_services(p))["slots"][0]
             slot=(datetime.fromisoformat(slot)+timedelta(days=1)).isoformat()
             package=SERVICES[service].get("package",SERVICES[service]["label"])
-            await ctx.send(target,chat_message(envelope(package+" in Indiranagar Bengaluru "+slot+" under INR 1000")))
+            details={"sofa_cleaning":" 3 seats fabric", "washing_machine":" front-loading not spinning", "furniture":" two flat-pack chairs instructions available", "mattress_cleaning":" two queen mattresses", "carpet_cleaning":" synthetic 8 by 6 feet", "refrigerator":" double-door not cooling", "water_purifier":" RO+UV routine maintenance"}.get(service,"")
+            await ctx.send(target,chat_message(envelope(package+details+" in Indiranagar Bengaluru "+slot+" under INR 5000")))
 
         bureau.add(probe)
         # Agent.setup runs actual handlers and queues; no HTTP listener needed.
