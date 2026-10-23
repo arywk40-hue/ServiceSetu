@@ -9,7 +9,7 @@ Book a trusted local service, approve the exact price, and recover when the prov
 
 **Current demo and narrow pilot:** [complete ASI:One steps, Razorpay/Stripe test setup, operator commands and evidence limits](docs/demo-pilot-runbook.md). Customer status cards now expose messages, completion, history and booking-linked problem reports. A trusted operator can configure one consenting plumbing business using the existing `p4` identity in an isolated pilot database; fictional alternatives are disabled there. No real provider has joined through this work.
 
-**Prototype only:** six fictional providers by default, twelve in the expanded demo, sixteen in the full catalogue; twelve service packages across cleaning, repairs, inspections and assembly. Location intake accepts Indian cities and localities with optional PIN codes; bookings require declared provider coverage. The original demo serves Indiranagar, Bengaluru; an optional demo copy adds fictional Powai, Mumbai branches. See [location intake and coverage](docs/nationwide-locations.md). Uses a mock credential registry; simulated or Stripe **test** payments. No actual service, identity verification, real money, UPI integration, escrow or payout. “Verified” always refers to the mock registry. Provider-supplied documents are explicitly unverified.
+**Prototype only:** six fictional providers by default, twelve in the expanded demo, sixteen in the full catalogue; twelve service packages across cleaning, repairs, inspections and assembly. Location intake accepts Indian cities and localities with optional PIN codes; bookings require declared provider coverage. The original demo serves Indiranagar, Bengaluru; an optional demo copy adds fictional Powai, Mumbai branches. See [location intake and coverage](docs/nationwide-locations.md). Uses a mock credential registry; simulated or Stripe/Razorpay/FET **test-only** payments. Native FET is Dorado-only. No actual service, identity verification, real money, UPI integration, escrow or payout. “Verified” always refers to the mock registry. Provider-supplied documents are explicitly unverified.
 
 ## Start in 30 seconds, no keys required
 
@@ -124,7 +124,37 @@ choose appointment cards or reply `option 1`; no ISO timestamp is required.
 
 Run `.venv/bin/python -m servicesetu.stripe_check` after adding keys privately to `.env`; it checks test authentication without creating a payment or printing keys/balance data. Card-only checkout stays embedded (`redirect_on_completion=never`). The payment rail is persisted per booking, retries retrieve the same checkout, and `resume checkout` retries saved consent without creating another booking. A delayed reference-free checkout rejection cannot cancel a confirmed booking. Persisted result notices return reconciliation outcomes to the original conversation. Neither this check nor SDK-double tests prove ASI:One checkout rendering.
 
-Live proof of Razorpay authentication, hosted checkout, capture or refund is pending; both test credentials are absent. The October 23 signed-in mock chat completed and visibly rendered the full booking, explicit quote approval, simulated confirmation, provider cancellation/reversal, fresh replacement approval, replacement confirmation and combined history. The expired first replacement was safely rejected; the customer then reviewed a fresh quote with the original constraints. This does not prove fresh-account discovery or public shared-chat access. A demo video was not captured because QuickTime screen recording was disabled. Stripe embedded rendering also remains unverified. Stripe test mode uses immediate capture, not production authorization/capture or an internal double-entry ledger. Discretionary refunds and payout changes have no agent tool. Policy compensation refunds run only through deterministic test-payment paths.
+### Native FET on Dorado testnet
+
+`PAYMENT_MODE=fet_testnet` enables only the Fetch Dorado testnet (`dorado-1`, `atestfet`, 18 decimals). Mainnet and other networks are refused. Set `FET_TEST_AMOUNT` to a positive amount with at most 18 decimal places (default `0.1`) and keep `FET_NETWORK=dorado-1` and `FET_USE_TESTNET=true` in the private `.env`. This amount is shown on the quote review before approval and is stored with that approval. It is a fixed test-token amount, **not an INR conversion**. The INR service quote remains separately visible.
+
+The seller sends the official Agent Payment Protocol `RequestPayment` with `Funds(currency="FET", payment_method="fet_direct")`, a booking reference and Dorado metadata. The recipient is the Concierge's native ledger wallet (`fetch1…`), derived separately from the public ASI messaging identity (`agent1…`). The application never asks for or stores the customer's wallet recovery phrase/private key. ASI:One wallet support and the rendered payment card need a live check; local protocol tests do not prove that interactive experience.
+
+To display the existing ServiceSetu recipient address (public address only), use the private configured ServiceSetu seed locally; the command does not print or upload it:
+
+```sh
+.venv/bin/python -m servicesetu.fet_wallet
+```
+
+For a customer test wallet, use a wallet explicitly configured for Dorado and copy only its public `fetch1…` address into Fetch's faucet. The official faucet grants test funds with no market value; the same wallet needs a small balance for network fees:
+
+```sh
+curl -X POST -H 'Content-Type: application/json' \
+  -d '{"address":"<customer-fetch1-address>"}' \
+  https://faucet-dorado.fetch.ai/api/v3/claims
+```
+
+After the customer approves the payment card, the server queries Dorado and verifies the transaction's success, hash, exact sender, recipient, `atestfet` amount, booking invoice, network and hold eligibility. A transaction hash alone never confirms a booking. Repeated commits and cross-booking transaction reuse are rejected. A verified transfer received after the invoice deadline or hold expiry cannot confirm; it becomes `refund_required`.
+
+Cancellation does not send or claim a refund. A refund is a **separate on-chain Dorado transfer** from the configured recipient wallet back to the paying wallet. After an operator has sent that testnet transfer, record it only after server verification:
+
+```sh
+.venv/bin/python -m servicesetu.fet_refund BOOKING_ID DORADO_REFUND_TX_HASH
+```
+
+This command verifies an existing refund; it does not sign or send one. The current code does not automate refunds. Use testnet funds only. Local transfer-verifier tests do not establish that an ASI:One wallet can render or complete the card.
+
+Live proof of Razorpay authentication, hosted checkout, capture or refund is pending; both test credentials are absent. The October 23 signed-in mock chat completed and visibly rendered the full booking, explicit quote approval, simulated confirmation, provider cancellation/reversal, fresh replacement approval, replacement confirmation and combined history. The expired first replacement was safely rejected; the customer then reviewed a fresh quote with the original constraints. This does not prove fresh-account discovery or public shared-chat access. A demo video was not captured because QuickTime screen recording was disabled. Stripe embedded rendering and native FET wallet-card rendering remain unverified. FET transaction tests use ledger doubles; no Dorado transaction was sent or received. Stripe test mode uses immediate capture, not production authorization/capture or an internal double-entry ledger. Discretionary refunds and payout changes have no agent tool. Policy compensation refunds run only through deterministic test-payment paths.
 
 ## Provider cancellation demo
 
@@ -159,7 +189,7 @@ One full command: `.venv/bin/python -m servicesetu prove`.
 | 10. Reconstruct booking history | `test_11`, actual mesh audit |
 | 11. Restricted actions gated | `test_12`, `test_13`, `test_17`, `test_18` |
 
-The suite contains **280 scenarios**, including **32 workflow-hardening checks and 14 Razorpay API-double checks** for Stripe retries/reconciliation/refunds, protocol ownership, provider access, completion, encrypted reports, transport retries and pilot acceptance. Stripe boundary checks use SDK doubles, not actual transactions. The full harness also exercises actual local uAgent booking/recovery flows across the twelve packages plus two location variants. Those checks prove binding and failure behavior locally; they do not claim a real test gateway transaction. Routine evidence is written under ignored `artifacts/local/`; published examples remain under `artifacts/`. All use synthetic customer data. SQLite transactions and a unique active-slot index own reservation; quotes and events reject updates/deletes. File owners can still alter the database directly: append-only application audit is not cryptographic tamper-proof evidence. Shared SQLite is for a **single-machine Bureau**, not independently hosted Agentverse containers.
+The suite contains **298 scenarios**, including **32 workflow-hardening checks, 14 Razorpay API-double checks, and 14 Dorado FET protocol/ledger-double checks** for retries, ownership, exact transfer verification, replay, expiry and refund status. Stripe and FET boundary checks use SDK/ledger doubles, not actual transactions. The full harness also exercises actual local uAgent booking/recovery flows across the twelve packages plus two location variants. Those checks prove binding and failure behavior locally; they do not claim a live gateway or wallet transaction. Routine evidence is written under ignored `artifacts/local/`; published examples remain under `artifacts/`. All use synthetic customer data. SQLite transactions and a unique active-slot index own reservation; quotes and events reject updates/deletes. File owners can still alter the database directly: append-only application audit is not cryptographic tamper-proof evidence. Shared SQLite is for a **single-machine Bureau**, not independently hosted Agentverse containers.
 
 Two live integration checks have also passed:
 
@@ -183,6 +213,7 @@ A local authenticated [provider inbox and booking messages](docs/booking-communi
 ## Primary references
 
 - [Fetch.ai uAgents](https://github.com/fetchai/uAgents) and the installed 0.25.5 SDK signatures/specifications.
+- Official [Agent Payment Protocol](https://uagents.fetch.ai/docs/guides/agent-payment-protocol), [Dorado network settings](https://network.fetch.ai/docs/guides/ledger/references/active-networks), [Dorado faucet](https://network.fetch.ai/docs/guides/ledger/faucet), and [FET example](https://github.com/fetchai/innovation-lab-examples/tree/main/fet-example).
 - [ACP interactive cards](https://docs.agentverse.ai/documentation/advanced-usages/agent-driven-interactive-cards) and [predefined card schemas](https://docs.agentverse.ai/documentation/advanced-usages/predefined-card-schemas).
 - [Fetch.ai embedded Stripe example](https://github.com/fetchai/innovation-lab-examples/tree/main/stripe-horoscope-agent), consulted for metadata shape; implementation here is original.
 - [ASI:One](https://asi1.ai), [Agentverse](https://agentverse.ai), [Stripe test dashboard](https://dashboard.stripe.com/test/apikeys).

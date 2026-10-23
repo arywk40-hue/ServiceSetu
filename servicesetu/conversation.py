@@ -2,6 +2,7 @@
 import json
 import re
 import secrets
+import os
 from .core import Rejected
 from . import cards
 from .reasoning import Reasoner,rupees
@@ -11,6 +12,7 @@ from .addresses import validate_address
 from .appointments import appointment
 from .catalogue import SERVICES,CATEGORIES,unavailable_message,package_from_text,detect_service
 from .service_details import FIELDS,extract_details,validate_details,next_question
+from .fet_payments import fet_amount as configured_fet_amount
 
 
 def strip_recipient(text, address=None):
@@ -56,9 +58,15 @@ def selection(text):
 
 
 class Conversation:
-    def __init__(self,store,reasoner=None):
+    def __init__(self,store,reasoner=None,payment_mode=None):
         self.store=store
         self.reasoner=reasoner or Reasoner()
+        self.payment_mode=payment_mode or os.getenv('PAYMENT_MODE','mock')
+
+    def review_card(self,q,b,nonce,state=None):
+        offer=(state or {}).get('fet_offer') or {}
+        amount=offer.get('token_amount') if offer.get('quote_id')==q['id'] else None
+        return cards.review(q,b,nonce,payment_mode=self.payment_mode,fet_amount=amount)
 
     def ask_address(self,owner,state,q):
         if q['expires']<=self.store.clock():raise Rejected('Quote expired; request fresh providers before adding an address')
@@ -78,9 +86,14 @@ class Conversation:
         b=await bus.call('booking','hold',owner,quote=q['id'],recovery_of=state.get('recovery_of'),request_id=request_id,address=address,defer_address=address is None)
         nonce='at_'+secrets.token_hex(16)
         state.update(booking=b['id'],quote=q['id'],approval_token=nonce)
+        if self.payment_mode=='fet_testnet':
+            amount,atomic=configured_fet_amount()
+            state['fet_offer']={'quote_id':q['id'],'network':'dorado-1','denom':'atestfet',
+                                'token_amount':amount,'atomic_amount':str(atomic)}
+        else:state.pop('fet_offer',None)
         for field in ('pending_address_quote','pending_booking_address','address_token'):state.pop(field,None)
         self.store.save_session(owner,state)
-        return cards.review(q,b,nonce)
+        return self.review_card(q,b,nonce,state)
 
     def details_check(self,owner,state,partial):
         service=partial.get("service")
@@ -208,6 +221,9 @@ class Conversation:
                 result=await bus.call('payment','start',owner,booking=bid)
                 if result.get('razorpay'):return cards.razorpay_checkout(result)
                 if result.get('stripe'):return dict(cards.envelope('Resume the same Stripe TEST checkout. No new payment or booking is created by retrying.'),payment=result)
+                if result.get('fet_invoice'):
+                    invoice=result['fet_invoice']
+                    return dict(cards.envelope(f"Resume the same Dorado FET testnet invoice for {invoice['token_amount']} FET. No new invoice or booking is created by retrying."),payment=result)
                 return cards.booking_status(result['booking'],self.store.get_quote(b['quote'],owner))
             problem=re.fullmatch(r'\s*report (?:a )?problem\s*:\s*(.+)',text,re.I|re.S)
             if action=='problem_form' or low.strip() in ('report a problem','report problem'):
@@ -360,12 +376,12 @@ class Conversation:
                 for field in ('pending_booking_address','address_token'):state.pop(field,None)
                 self.store.save_session(owner,state)
                 q=self.store.get_quote(b['quote'],owner)
-                return cards.review(q,b,nonce) if b['state']=='held' else cards.booking_status(b,q)
+                return self.review_card(q,b,nonce,state) if b['state']=='held' else cards.booking_status(b,q)
             if state.get('pending_booking_address') and not action and skip_address:
                 bid=state.pop('pending_booking_address');state.pop('address_token',None);self.store.save_session(owner,state)
                 b=self.store.booking(bid,owner)
                 q=self.store.get_quote(b['quote'],owner)
-                return cards.review(q,b,state.get('approval_token')) if b['state']=='held' else cards.booking_status(b,q)
+                return self.review_card(q,b,state.get('approval_token'),state) if b['state']=='held' else cards.booking_status(b,q)
             if action in ('open_quote_address','skip_address') or (state.get('pending_address_quote') and not action and skip_address):
                 qid=state.get('pending_address_quote')
                 if not qid or (action and (picked.get('quote_id')!=qid or picked.get('address_token')!=state.get('address_token'))):raise Rejected('Use the latest address choice')
@@ -410,11 +426,17 @@ class Conversation:
                 bid=state["booking"]
                 b=self.store.booking(bid,owner)
                 if b["state"]=="confirmed": return cards.booking_status(b,self.store.get_quote(state["quote"],owner))
-                await bus.call("booking","approve",owner,booking=bid,quote=state["quote"])
+                payment_terms=state.get('fet_offer') if self.payment_mode=='fet_testnet' else None
+                if self.payment_mode=='fet_testnet' and (not payment_terms or payment_terms.get('quote_id')!=state['quote']):
+                    raise Rejected('The displayed FET amount is missing; reopen the exact quote review')
+                await bus.call("booking","approve",owner,booking=bid,quote=state["quote"],payment_terms=payment_terms)
                 result=await bus.call("payment","start",owner,booking=bid)
                 if result.get('razorpay'):return cards.razorpay_checkout(result)
                 if result.get("stripe"):
                     return dict(cards.envelope("Approved. Complete the embedded Stripe TEST checkout. The slot hold lasts two minutes; a late successful payment is refunded rather than confirming an expired slot."),payment=result)
+                if result.get('fet_invoice'):
+                    invoice=result['fet_invoice']
+                    return dict(cards.envelope(f"Exact quote approval recorded. ASI:One will now request {invoice['token_amount']} FET on Dorado testnet. This separate test-token amount is not an INR conversion. Approve the payment in the wallet card before the booking hold expires."),payment=result)
                 return cards.booking_status(result["booking"],self.store.get_quote(state["quote"],owner))
             if action=="reject" or low=="cancel booking":
                 if not state.get("booking"): raise Rejected("No held or confirmed booking to cancel")

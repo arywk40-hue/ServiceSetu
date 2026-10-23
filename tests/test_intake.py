@@ -119,7 +119,7 @@ class Intake(unittest.TestCase):
             db.executescript(old)
             db.execute("INSERT INTO quotes VALUES(?,?,?,?,?,?,?,?,?,?)",("q_legacy","p1",self.slot,"alice",1,69900,self.clock()+300,encode({"snapshot":"legacy accepted scope"}),"legacy-digest",None))
             db.execute("INSERT INTO bookings(id,owner,quote,provider,slot,state,hold_until,approved,payment_state) VALUES(?,?,?,?,?,'confirmed',?,1,'paid')",("b_legacy","alice","q_legacy","p1",self.slot,self.clock()+120))
-            db.execute("INSERT INTO payments VALUES(?,?,?,?,?,?)",("pay_legacy","b_legacy","idem_legacy",69900,"paid","cs_test_legacy"))
+            db.execute("INSERT INTO payments(id,booking,idem,amount,state,external) VALUES(?,?,?,?,?,?)",("pay_legacy","b_legacy","idem_legacy",69900,"paid","cs_test_legacy"))
             db.execute("INSERT INTO events(at,entity,kind,actor,payload) VALUES(?,?,?,?,?)",(self.clock(),"b_legacy","booking_confirmed","alice","{}"))
         migrated=Store(path,self.clock);migrated.seed()
         self.assertEqual(migrated.booking("b_legacy","alice")["payment_state"],"paid")

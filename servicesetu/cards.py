@@ -163,26 +163,33 @@ def booking_address_form(b,nonce):
                     'submit_cta':{'label':'Save or continue','selection':{'action':'set_booking_address','booking_id':b['id'],'address_token':nonce}}})
 
 
-def review(q,b,nonce):
+def review(q,b,nonce,payment_mode='mock',fet_amount=None):
     selection={"booking_id":b["id"],"quote_id":q["id"],"approval_token":nonce}
     rows=[("Provider",q["name"]),("Appointment",appointment_label(q["slot"])),("Fixed total",f"INR {q['amount']/100:.2f}"),
           ("Scope",q["scope"]),("Excluded",q["exclusions"]),("Documents",document_label(q["trust"])),
-          ("Checked",appointment_label(q["trust"]["checked_at"])),("Cancellation",q["cancellation"]),("Payment","Test mode only"),
+          ("Checked",appointment_label(q["trust"]["checked_at"])),("Cancellation",q["cancellation"]),
           ("Quote version",str(q["version"])),("Hold expires",datetime.fromtimestamp(b["hold_until"],ZoneInfo("Asia/Kolkata")).strftime("%d %B %Y, %I:%M:%S %p IST"))]
+    if payment_mode=='fet_testnet':
+        if fet_amount is None:
+            from .fet_payments import fet_amount as configured_fet_amount
+            fet_amount=configured_fet_amount()[0]
+        rows.append(("Payment after approval",f"{fet_amount} FET on Dorado testnet (atestfet)"))
+        rows.append(("Price relationship","Separate test-token amount; no INR-to-FET conversion"))
+    else:rows.append(("Payment","Test mode only"))
     if q.get('location'):rows.insert(1,('Location',location_label(q['location'])))
     rows.insert(2,('Service address',b['service_address']['address_line'] if b.get('service_address') else 'Not provided — you can add it after booking'))
     text="Review before approving:\n"+"\n".join(f"{k}: {v}" for k,v in rows)
-    text+="\nChoose Approve test payment to confirm, or Release slot to cancel this review."
+    text+="\nChoose Approve FET test payment to request the displayed amount." if payment_mode=='fet_testnet' else "\nChoose Approve test payment to confirm, or Release slot to cancel this review."
     text+=f"\nText approval fallback: approve {b['id']} {q['id']} {nonce}"
     text+='\nRecord: '+('Real pilot business; operator must accept this booking before payment.' if q.get('record_kind')=='pilot' else 'Fictional demo provider.')
     if b.get('service_address'):text+="\nTo correct the address before approval, send 'change address'."
     return envelope(text,"review",{"title":"Approve this test booking", "summary_rows":[{"label":k,"value":v} for k,v in rows],
-         "approve_cta":{"label":"Approve test payment","selection":dict(selection,action="approve"),"primary":True},
+         "approve_cta":{"label":"Approve FET test payment" if payment_mode=='fet_testnet' else "Approve test payment","selection":dict(selection,action="approve"),"primary":True},
          "reject_cta":{"label":"Release slot","selection":dict(selection,action="reject")}})
 
 
 def booking_status(b,q):
-    mode='Razorpay TEST transaction' if b.get('payment_mode')=='razorpay_test' else 'Stripe TEST transaction' if b.get('payment_mode')=='stripe_test' else 'Simulated payment · no gateway charge' if b.get('payment_mode')=='mock' else 'No payment started'
+    mode='Razorpay TEST transaction' if b.get('payment_mode')=='razorpay_test' else 'Stripe TEST transaction' if b.get('payment_mode')=='stripe_test' else 'Dorado FET testnet · native test tokens' if b.get('payment_mode')=='fet_testnet' else 'Simulated payment · no gateway charge' if b.get('payment_mode')=='mock' else 'No payment started'
     text=(f"Booking status: {b['state']}.\n\n**Provider:** {q['name']}\n"
           f"**Appointment:** {appointment_label(q['slot'])}\n**Total:** INR {q['amount']/100:.2f}\n"
           f"**Test payment:** {b['payment_state'].replace('_',' ')}\n\n"
@@ -276,7 +283,7 @@ def booking_history(events, booking=None):
                          "refunded": "Reversed", "refund_required": "Refund required; not yet confirmed",
                          "voided": "Voided", "declined": "Declined"}.get(payment, payment.replace("_", " "))
         lines.append(f"**Test payment:** {payment_label}")
-        lines.append('**Payment rail:** '+('Razorpay TEST' if booking.get('payment_mode')=='razorpay_test' else 'Stripe TEST' if booking.get('payment_mode')=='stripe_test' else 'Simulated · no gateway charge' if booking.get('payment_mode')=='mock' else 'No payment started'))
+        lines.append('**Payment rail:** '+('Razorpay TEST' if booking.get('payment_mode')=='razorpay_test' else 'Stripe TEST' if booking.get('payment_mode')=='stripe_test' else 'Dorado FET testnet transfer · no INR conversion' if booking.get('payment_mode')=='fet_testnet' else 'Simulated · no gateway charge' if booking.get('payment_mode')=='mock' else 'No payment started'))
     lines.extend(["", "### Full history", "Every recorded event is listed below. All times are IST."])
     previous_day = None
     for number, event in enumerate(events, start=1):
@@ -309,11 +316,18 @@ def booking_history(events, booking=None):
             text = f"You approved the exact quote from {name}."
         elif kind == "payment_started":
             text = f"Test payment started: {money(payload['amount'])}."
+        elif kind == 'fet_testnet_invoice_created':
+            text=f"Dorado testnet invoice requested: {payload.get('token_amount')} FET ({payload.get('denom')}); no INR conversion."
+            if payload.get('deadline'):
+                deadline=datetime.fromtimestamp(payload['deadline'],ZoneInfo('Asia/Kolkata'))
+                text+=' Payment deadline: '+deadline.strftime('%d %b, %I:%M:%S %p IST')+'.'
         elif kind == "booking_confirmed":
             label = "Replacement booking" if event["entity"] in replacements else "Booking"
             text = f"{label} confirmed with {name}: {money(payload['amount'])}."
             if quote.get("slot"):
                 text += f" Appointment: {appointment(quote['slot'])}."
+            if payload.get('payment_network')=='dorado-1' and payload.get('payment_transaction'):
+                text+=f" Dorado testnet transfer: {payload['payment_transaction']}."
         elif kind in ("provider_cancelled", "customer_cancelled"):
             actor = "Provider cancelled" if kind == "provider_cancelled" else "You cancelled"
             text = f"{actor} the booking with {name}. {reversal(payload.get('payment_state'))}"
@@ -328,6 +342,8 @@ def booking_history(events, booking=None):
             text = f"Booking could not be confirmed. {reversal(payload.get('payment_state'))}"
         elif kind in ("stripe_test_refunded","razorpay_test_refunded"):
             text = "Test refund confirmed."
+        elif kind == 'fet_testnet_refunded':
+            text='Dorado testnet refund transfer verified: '+str(payload.get('refund','unknown'))+'.'
         elif kind == "action_rejected":
             text = "Request could not proceed: " + payload.get("reason", "Please review the booking status.")
         elif kind == "service_completed":

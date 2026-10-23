@@ -26,6 +26,7 @@ from .core import Store,Rejected
 from .service import Services
 from .conversation import Conversation,strip_recipient
 from .transport import send_customer,delivered
+from .fet_payments import request_message as fet_request_message
 
 
 class Work(Model):
@@ -99,7 +100,7 @@ def profile(role):
         "![tag:hackathon](https://img.shields.io/badge/hackathon-5F43F1)\n\n"
         +("Request fictional home-service packages at Indian locations. Provide city and locality (PIN optional); booking depends on each provider's declared coverage. Ask show services for the available packages, including cleaning, appliance inspections, repairs and furniture assembly. Provider availability depends on the active demo database. Compare provider agents, see honest trust labels, approve one quote, receive a test booking, and recover from provider cancellation. Try: AC service in Indiranagar Bengaluru tomorrow 10am under INR 1000. Ask show what happened for an audit timeline. " if customer else
           f"Internal ServiceSetu {role} specialist. Not a customer chat entry point. Accepts typed Work messages only from the Concierge. ")
-        +"Providers, credentials and registry are seeded test data. Payment is simulated or Stripe test mode; no real service or money. Discretionary refunds, payouts and verification overrides require human review.\n")
+        +"Providers, credentials and registry are seeded test data. Payment is simulated, Stripe/Razorpay test mode, or Dorado native FET testnet only; no mainnet payments. Discretionary refunds, payouts and verification overrides require human review.\n")
 
 
 def create_mesh(store=None,offline=None,reasoner=None,payment_mode=None):
@@ -125,7 +126,7 @@ def create_mesh(store=None,offline=None,reasoner=None,payment_mode=None):
             enable_agent_inspector=not offline,handle_messages_concurrently=False,**kwargs)
     addresses={role:agent.address for role,agent in agents.items()}
     concierge=agents["concierge"]
-    conversation=Conversation(store,reasoner)
+    conversation=Conversation(store,reasoner,payment_mode=services.payments.mode)
 
     async def send_reply(ctx,customer,reply):
         # Only acknowledge notices covered by this actual customer response.
@@ -175,10 +176,14 @@ def create_mesh(store=None,offline=None,reasoner=None,payment_mode=None):
             if reply.get("payment"):
                 payment=reply["payment"]
                 b=payment["booking"]
-                q=store.get_quote(b["quote"],owner)
-                await send_customer(ctx,sender,RequestPayment(accepted_funds=[Funds(currency="INR",amount=f"{q['amount']/100:.2f}",payment_method="stripe")],
-                    recipient=concierge.address,deadline_seconds=max(1,int(b["hold_until"]-store.clock())),reference=b["id"],
-                    description="ServiceSetu fictional service · Stripe TEST payment",metadata={"stripe":payment["stripe"],"service":"servicesetu_test"}))
+                if payment.get('fet_invoice'):
+                    invoice=payment['fet_invoice']
+                    await send_customer(ctx,sender,fet_request_message(invoice,store.clock()))
+                else:
+                    q=store.get_quote(b["quote"],owner)
+                    await send_customer(ctx,sender,RequestPayment(accepted_funds=[Funds(currency="INR",amount=f"{q['amount']/100:.2f}",payment_method="stripe")],
+                        recipient=concierge.address,deadline_seconds=max(1,int(b["hold_until"]-store.clock())),reference=b["id"],
+                        description="ServiceSetu fictional service · Stripe TEST payment",metadata={"stripe":payment["stripe"],"service":"servicesetu_test"}))
             await send_reply(ctx,sender,reply)
         except Exception:
             ctx.logger.error("Concierge failed; no outcome assumed")
@@ -202,11 +207,16 @@ def create_mesh(store=None,offline=None,reasoner=None,payment_mode=None):
             with store.connect() as db:
                 row=db.execute("SELECT owner FROM bookings WHERE id=?",(bid,)).fetchone()
             if not row or row["owner"].rsplit(":",1)[0]!=sender: raise Rejected("Payment belongs to another customer")
-            if msg.funds.payment_method!="stripe": raise Rejected("Expected Stripe test payment")
             owner=row["owner"]
             if owner!=sender+':'+str(ctx.session):raise Rejected('Payment belongs to another conversation')
-            b=await MeshBus(ctx,addresses).call("payment","commit",owner,booking=bid,transaction=msg.transaction_id,
-                currency=msg.funds.currency,amount=msg.funds.amount,recipient=msg.recipient,expected_recipient=concierge.address)
+            if msg.funds.payment_method=='fet_direct':
+                if services.payments.mode!='fet_testnet':raise Rejected('Dorado testnet payment is disabled')
+                b=await MeshBus(ctx,addresses).call('payment','commit_fet',owner,booking=bid,transaction=msg.transaction_id,
+                    funds=msg.funds,recipient=msg.recipient,metadata=msg.metadata,reference=msg.reference)
+            else:
+                if msg.funds.payment_method!="stripe": raise Rejected("Expected Stripe test payment")
+                b=await MeshBus(ctx,addresses).call("payment","commit",owner,booking=bid,transaction=msg.transaction_id,
+                    currency=msg.funds.currency,amount=msg.funds.amount,recipient=msg.recipient,expected_recipient=concierge.address)
             if b["state"]=="confirmed": await ctx.send(sender,CompletePayment(transaction_id=msg.transaction_id))
             else: await ctx.send(sender,CancelPayment(transaction_id=msg.transaction_id,reason="Expired reservation; test payment reversed or queued for review"))
             await send_reply(ctx,sender,booking_status(b,store.get_quote(b["quote"],owner)))
@@ -256,6 +266,10 @@ def create_mesh(store=None,offline=None,reasoner=None,payment_mode=None):
                 return ControlResult(ok=False,message="Cancellation needs reconciliation; ask for booking status")
     for role,agent in agents.items():
         if role.startswith("provider:"): register_cancel(role,agent)
+
+    if services.payments.mode=='fet_testnet':
+        # Agent identity is agent1...; the agent's native ledger wallet is fetch1...
+        services.payments.fet_recipient=str(concierge.wallet.address())
 
     @agents["trust_monitor"].on_interval(period=30)
     async def monitor(ctx:Context):

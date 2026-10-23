@@ -7,9 +7,9 @@ from .catalogue import provider_services
 
 
 class Services:
-    def __init__(self,store,payment_mode=None):
+    def __init__(self,store,payment_mode=None,fet_recipient=None):
         self.store=store
-        self.payments=Payments(store,payment_mode)
+        self.payments=Payments(store,payment_mode,fet_recipient=fet_recipient)
 
     def execute(self,role,action,owner,data):
         s=self.store
@@ -36,7 +36,7 @@ class Services:
             if action=="request": return s.request(owner,data["job"])
             if action=="hold": return s.hold(owner,data["quote"],data.get("recovery_of"),data.get("request_id"),data.get('address'),data.get('defer_address',False))
             if action=="approve":
-                s.approve(owner,data["booking"],data["quote"])
+                s.approve(owner,data["booking"],data["quote"],payment_terms=data.get('payment_terms'))
                 return s.booking(data["booking"],owner)
             if action=="status": return s.booking(data["booking"],owner)
             if action=="timeline": return {"events":s.timeline(owner,data["booking"])}
@@ -47,6 +47,7 @@ class Services:
             if action=='refresh':return self.payments.refresh(owner,data['booking'])
             if action=="start": return self.payments.start(owner,data["booking"])
             if action=="commit": return self.payments.commit(owner,data["booking"],data["transaction"],data["currency"],data["amount"],data["recipient"],data["expected_recipient"])
+            if action=="commit_fet": return self.payments.commit_fet(owner,data['booking'],data['transaction'],data['funds'],data['recipient'],data.get('metadata'),data.get('reference'))
             if action=="cancel": return self.payments.cancel(owner,data["booking"],data.get("actor","customer"))
         if role=="recovery" and action=="alternatives":
             choices,excluded=s.recovery(owner,data["booking"],data["job"])

@@ -46,6 +46,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS exclusive_slot ON bookings(provider,slot)
 CREATE TABLE IF NOT EXISTS payments(id TEXT PRIMARY KEY,
  booking TEXT NOT NULL UNIQUE REFERENCES bookings(id), idem TEXT NOT NULL UNIQUE,
  amount INTEGER NOT NULL, state TEXT NOT NULL, external TEXT UNIQUE);
+CREATE TABLE IF NOT EXISTS verified_transfers(
+ tx_hash TEXT PRIMARY KEY, booking TEXT NOT NULL REFERENCES bookings(id),
+ direction TEXT NOT NULL CHECK(direction IN ('incoming','refund')),
+ sender TEXT NOT NULL, recipient TEXT NOT NULL, amount TEXT NOT NULL, denom TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY AUTOINCREMENT,
  at REAL NOT NULL, entity TEXT NOT NULL, kind TEXT NOT NULL, actor TEXT NOT NULL,
  payload TEXT NOT NULL);
@@ -84,6 +88,10 @@ class Store:
             if 'mode' not in {r['name'] for r in db.execute('PRAGMA table_info(payments)')}:
                 db.execute("ALTER TABLE payments ADD COLUMN mode TEXT NOT NULL DEFAULT 'mock'")
                 db.execute("UPDATE payments SET mode='stripe_test' WHERE external IS NOT NULL")
+            payment_columns={r['name'] for r in db.execute('PRAGMA table_info(payments)')}
+            for name,definition in (('invoice','TEXT'),('payer_wallet','TEXT'),('refund_external','TEXT')):
+                if name not in payment_columns:db.execute(f'ALTER TABLE payments ADD COLUMN {name} {definition}')
+            db.execute('CREATE UNIQUE INDEX IF NOT EXISTS unique_payment_refund ON payments(refund_external) WHERE refund_external IS NOT NULL')
             sql=db.execute("SELECT sql FROM sqlite_master WHERE name='bookings'").fetchone()[0]
             if "'requested'" not in sql:
                 self.migrate_requests(db)
@@ -453,7 +461,7 @@ class Store:
         if address:result['service_address']=json.loads(address[0])['address']
         return result
 
-    def approve(self, owner, bid, qid):
+    def approve(self, owner, bid, qid, payment_terms=None):
         with self.tx() as db:
             b = db.execute("SELECT * FROM bookings WHERE id=? AND owner=?", (bid,owner)).fetchone()
             if not b or b["quote"] != qid: raise Rejected("Approval does not match the held quote")
@@ -462,7 +470,9 @@ class Store:
             if b["state"] != "held" or b["hold_until"] <= self.clock(): raise Rejected("Hold expired; refresh before approving")
             if not b['approved']:
                 db.execute("UPDATE bookings SET approved=1 WHERE id=?", (bid,))
-                self.event(db,bid,"customer_approved",owner,quote=qid)
+                payload={'quote':qid}
+                if payment_terms is not None:payload['payment_terms']=payment_terms
+                self.event(db,bid,"customer_approved",owner,**payload)
 
     def begin_payment(self, owner, bid, idem, mode='mock'):
         with self.tx() as db:
@@ -495,6 +505,46 @@ class Store:
             self.event(db,bid,"payment_started",owner,payment=pid,amount=q["amount"],quote=b["quote"])
         return {"id":pid,"booking":bid,"idem":idem,"amount":q["amount"],"state":"pending","external":None,'mode':mode}
 
+    def begin_fet_payment(self,owner,bid,idem,*,recipient,deadline_seconds):
+        """Create/retrieve one quote-bound Dorado invoice; never refresh it on retry."""
+        payment=self.begin_payment(owner,bid,idem,mode='fet_testnet')
+        with self.tx() as db:
+            b=db.execute('SELECT * FROM bookings WHERE id=? AND owner=?',(bid,owner)).fetchone()
+            p=db.execute('SELECT * FROM payments WHERE booking=?',(bid,)).fetchone()
+            if not b or not p or p['mode']!='fet_testnet' or not b['approved']:
+                raise Rejected('Approved Dorado payment intent required')
+            if p['invoice']:
+                invoice=json.loads(p['invoice'])
+                if invoice['recipient']!=recipient:raise Rejected('Stored FET invoice recipient does not match the configured wallet')
+                return dict(payment,invoice=invoice)
+            if b['state']!='held' or b['hold_until']<=self.clock():
+                raise Rejected('Hold expired before FET invoice creation; request a fresh quote')
+            q=db.execute('SELECT * FROM quotes WHERE id=?',(b['quote'],)).fetchone()
+            if not q or q['expires']<=self.clock():raise Rejected('Quote expired before FET invoice creation; request a fresh quote')
+            approval=db.execute("SELECT payload FROM events WHERE entity=? AND kind='customer_approved' ORDER BY seq DESC LIMIT 1",(bid,)).fetchone()
+            approval_payload=json.loads(approval['payload']) if approval else {}
+            terms=approval_payload.get('payment_terms') or {}
+            if terms.get('quote_id')!=b['quote'] or terms.get('network')!='dorado-1' or terms.get('denom')!='atestfet':
+                raise Rejected('Customer approval did not include this quote’s Dorado FET amount')
+            token_amount=terms.get('token_amount')
+            atomic_amount=terms.get('atomic_amount')
+            from .fet_payments import fet_amount
+            exact_amount,exact_atomic=fet_amount(token_amount)
+            if exact_amount!=token_amount or str(exact_atomic)!=str(atomic_amount):
+                raise Rejected('Approved FET payment amount is invalid')
+            window=min(int(deadline_seconds),max(1,int(b['hold_until']-self.clock())))
+            invoice={
+                'booking_id':bid,'quote_id':b['quote'],'customer':owner.rsplit(':',1)[0],
+                'session':owner.rsplit(':',1)[1] if ':' in owner else '',
+                'network':'dorado-1','denom':'atestfet','recipient':recipient,
+                'token_amount':token_amount,'atomic_amount':str(atomic_amount),
+                'deadline_at':min(b['hold_until'],self.clock()+window),'deadline_seconds':window,
+            }
+            db.execute('UPDATE payments SET invoice=? WHERE booking=? AND invoice IS NULL',(encode(invoice),bid))
+            self.event(db,bid,'fet_testnet_invoice_created',owner,quote=b['quote'],network='dorado-1',recipient=recipient,
+                       token_amount=token_amount,denom='atestfet',deadline=invoice['deadline_at'])
+        return dict(payment,invoice=invoice)
+
     def attach_checkout(self, owner, bid, checkout, mode='stripe_test'):
         self.booking(bid,owner)
         with self.tx() as db:
@@ -505,7 +555,8 @@ class Store:
                 db.execute("UPDATE payments SET external=? WHERE booking=? AND state='pending'", (checkout,bid))
                 self.event(db,bid,mode+"_checkout_created",owner,checkout=checkout)
 
-    def settle(self, owner, bid, *, success=True, provider_confirm=True, external=None):
+    def settle(self, owner, bid, *, success=True, provider_confirm=True, external=None, payer_wallet=None,
+               transfer_sender=None,transfer_recipient=None,transfer_amount=None,transfer_denom=None):
         """Called by mock adapter or only after server-side Stripe verification."""
         with self.tx() as db:
             b = db.execute("SELECT * FROM bookings WHERE id=? AND owner=?",(bid,owner)).fetchone()
@@ -513,21 +564,33 @@ class Store:
             if not b or not pay or not b["approved"]: raise Rejected("Approved payment intent required")
             if pay["state"] in ("paid","voided","declined","refund_required","refunded"):
                 return dict(b)
+            if external and pay['mode']=='fet_testnet':
+                prior=db.execute('SELECT booking,direction FROM verified_transfers WHERE tx_hash=?',(external,)).fetchone()
+                if prior and (prior['booking']!=bid or prior['direction']!='incoming'):
+                    raise Rejected('This on-chain transaction was already used')
+                db.execute('INSERT OR IGNORE INTO verified_transfers VALUES(?,?,?,?,?,?,?)',
+                           (external,bid,'incoming',transfer_sender or '',transfer_recipient or '',str(transfer_amount or ''),transfer_denom or ''))
+                db.execute('UPDATE payments SET payer_wallet=? WHERE booking=?',(payer_wallet,bid))
             q = db.execute("SELECT * FROM quotes WHERE id=?",(b["quote"],)).fetchone()
             p = self.provider(b["provider"])
             fresh = b["state"] == "held" and b["hold_until"] > self.clock() and q["expires"] > self.clock()
+            if pay['mode']=='fet_testnet':
+                invoice=json.loads(pay['invoice']) if pay['invoice'] else {}
+                fresh=fresh and invoice.get('deadline_at',0)>self.clock()
             fresh = fresh and p["available"] and b["slot"] in p["slots"] and self.trust(p,b["slot"])["eligible"]
             payload=json.loads(q['payload'])
             fresh=fresh and covers(p,payload.get('location',p)) and payload.get('service',p['service']) in provider_services(p)
             if success and provider_confirm and fresh:
                 db.execute("UPDATE payments SET state='paid',external=COALESCE(?,external) WHERE booking=?",(external,bid))
                 db.execute("UPDATE bookings SET state='confirmed',payment_state='paid' WHERE id=?",(bid,))
-                self.event(db,bid,"booking_confirmed",owner,quote=b["quote"],payment=pay["id"],amount=pay["amount"])
+                extra={'payment_transaction':external,'payment_network':'dorado-1'} if external and pay['mode']=='fet_testnet' else {}
+                self.event(db,bid,"booking_confirmed",owner,quote=b["quote"],payment=pay["id"],amount=pay["amount"],**extra)
             else:
                 state = "refund_required" if external and success else "voided" if success else "declined"
                 db.execute("UPDATE payments SET state=?,external=COALESCE(?,external) WHERE booking=?",(state,external,bid))
                 db.execute("UPDATE bookings SET state='cancelled',payment_state=? WHERE id=?",(state,bid))
-                self.event(db,bid,"payment_compensated",payment_state=state,reason="payment failed" if not success else "provider declined or hold expired")
+                extra={'payment_transaction':external,'payment_network':'dorado-1'} if external and pay['mode']=='fet_testnet' else {}
+                self.event(db,bid,"payment_compensated",payment_state=state,reason="payment failed" if not success else "provider declined or hold expired",**extra)
                 self.event(db,bid,"slot_released")
         return self.booking(bid,owner)
 
@@ -539,17 +602,30 @@ class Store:
             if b["state"] == "cancelled": return dict(b)
             if b["state"] == "completed": raise Rejected("Completed work requires human dispute review")
             payment=db.execute('SELECT mode FROM payments WHERE booking=?',(bid,)).fetchone()
-            stripe=stripe or bool(payment and payment['mode'] in ('stripe_test','razorpay_test'))
+            stripe=stripe or bool(payment and payment['mode'] in ('stripe_test','razorpay_test','fet_testnet'))
             state = ("refund_required" if stripe else "refunded") if b["payment_state"]=="paid" else b["payment_state"]
             db.execute("UPDATE bookings SET state='cancelled',payment_state=? WHERE id=?",(state,bid))
             db.execute("UPDATE payments SET state=? WHERE booking=?",(state,bid))
-            self.event(db,bid,"provider_cancelled" if actor.startswith("provider:") else "customer_cancelled",actor,payment_state=state)
+            reference=db.execute('SELECT external,mode FROM payments WHERE booking=?',(bid,)).fetchone()
+            extra={'payment_transaction':reference['external'],'payment_network':'dorado-1'} if reference and reference['mode']=='fet_testnet' and reference['external'] else {}
+            self.event(db,bid,"provider_cancelled" if actor.startswith("provider:") else "customer_cancelled",actor,payment_state=state,**extra)
             self.event(db,bid,"slot_released",actor)
         return self.booking(bid,owner)
 
-    def refund_done(self, owner, bid, refund_id, mode='stripe_test'):
+    def refund_done(self, owner, bid, refund_id, mode='stripe_test', transfer=None):
         self.booking(bid,owner)
         with self.tx() as db:
+            if mode=='fet_testnet':
+                if not transfer:raise Rejected('A verified Dorado refund transfer is required')
+                used=db.execute('SELECT booking,direction FROM verified_transfers WHERE tx_hash=?',(refund_id,)).fetchone()
+                if used and (used['booking']!=bid or used['direction']!='refund'):
+                    raise Rejected('This on-chain transaction was already used')
+                db.execute('INSERT OR IGNORE INTO verified_transfers VALUES(?,?,?,?,?,?,?)',
+                           (refund_id,bid,'refund',transfer['sender'],transfer['recipient'],str(transfer['amount']),transfer['denom']))
+                changed=db.execute("UPDATE payments SET state='refunded',refund_external=? WHERE booking=? AND state='refund_required'",(refund_id,bid)).rowcount
+                db.execute("UPDATE bookings SET payment_state='refunded' WHERE id=? AND payment_state='refund_required'",(bid,))
+                if changed:self.event(db,bid,'fet_testnet_refunded',owner,refund=refund_id,network='dorado-1')
+                return
             changed=db.execute("UPDATE payments SET state='refunded' WHERE booking=? AND state='refund_required'",(bid,)).rowcount
             db.execute("UPDATE bookings SET payment_state='refunded' WHERE id=? AND payment_state='refund_required'",(bid,))
             if changed:self.event(db,bid,mode+"_refunded",refund=refund_id)
