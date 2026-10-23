@@ -25,6 +25,8 @@ python3 -m servicesetu chat
 
 ## Run the actual Fetch.ai mesh
 
+Optional **Python backend MCP integrations** are documented in [TomTom and Taskrabbit setup](docs/external-mcp.md). TomTom provides separate business discovery, geocoding and qualified route estimates when a permitted `TOMTOM_API_KEY` is configured. Taskrabbit's current anonymous connector supports US assistance and an explicitly requested external draft link; India is refused. Discovery and links never become ServiceSetu bookings or payments. Install with `uv pip install --python .venv/bin/python -e '.[fetch,communications,external]'`. The original mock all-in-chat journey remains available.
+
 Windows PowerShell setup and existing-identity startup: [Windows guide](docs/windows.md).
 
 ```sh
@@ -189,7 +191,7 @@ One full command: `.venv/bin/python -m servicesetu prove`.
 | 10. Reconstruct booking history | `test_11`, actual mesh audit |
 | 11. Restricted actions gated | `test_12`, `test_13`, `test_17`, `test_18` |
 
-The suite contains **298 scenarios**, including **32 workflow-hardening checks, 14 Razorpay API-double checks, and 14 Dorado FET protocol/ledger-double checks** for retries, ownership, exact transfer verification, replay, expiry and refund status. Stripe and FET boundary checks use SDK/ledger doubles, not actual transactions. The full harness also exercises actual local uAgent booking/recovery flows across the twelve packages plus two location variants. Those checks prove binding and failure behavior locally; they do not claim a live gateway or wallet transaction. Routine evidence is written under ignored `artifacts/local/`; published examples remain under `artifacts/`. All use synthetic customer data. SQLite transactions and a unique active-slot index own reservation; quotes and events reject updates/deletes. File owners can still alter the database directly: append-only application audit is not cryptographic tamper-proof evidence. Shared SQLite is for a **single-machine Bureau**, not independently hosted Agentverse containers.
+The suite contains **320 scenarios**, including **32 workflow-hardening checks, 14 Razorpay API-double checks, and 18 Dorado FET protocol/ledger-double checks and 22 external MCP checks** for retries, ownership, exact transfer verification, replay, expiry and refund status. Stripe and FET boundary checks use SDK/ledger doubles, not actual transactions. The full harness also exercises actual local uAgent booking/recovery flows across the twelve packages plus two location variants. The current 320-test source suite and a bounded local AC booking/recovery mesh smoke pass. An additional full catalogue rerun stalled after nine mesh workflows and is not counted as complete. Those checks prove binding and failure behavior locally; they do not claim a live gateway or wallet transaction. Routine evidence is written under ignored `artifacts/local/`; published examples remain under `artifacts/`. All use synthetic customer data. SQLite transactions and a unique active-slot index own reservation; quotes and events reject updates/deletes. File owners can still alter the database directly: append-only application audit is not cryptographic tamper-proof evidence. Shared SQLite is for a **single-machine Bureau**, not independently hosted Agentverse containers.
 
 Two live integration checks have also passed:
 

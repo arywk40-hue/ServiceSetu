@@ -13,6 +13,7 @@ from .appointments import appointment
 from .catalogue import SERVICES,CATEGORIES,unavailable_message,package_from_text,detect_service
 from .service_details import FIELDS,extract_details,validate_details,next_question
 from .fet_payments import fet_amount as configured_fet_amount
+from .external_conversation import ExternalConversation
 
 
 def strip_recipient(text, address=None):
@@ -58,10 +59,11 @@ def selection(text):
 
 
 class Conversation:
-    def __init__(self,store,reasoner=None,payment_mode=None):
+    def __init__(self,store,reasoner=None,payment_mode=None,external=None):
         self.store=store
         self.reasoner=reasoner or Reasoner()
         self.payment_mode=payment_mode or os.getenv('PAYMENT_MODE','mock')
+        self.external=external or ExternalConversation(store)
 
     def review_card(self,q,b,nonce,state=None):
         offer=(state or {}).get('fet_offer') or {}
@@ -208,6 +210,8 @@ class Conversation:
         low=text.lower()
         skip_address=low.strip() in ('skip','skip for now','skip address','not now','later','add it later','provide later',"i'll provide it later",'i will provide it later',"i don't know my address",'i do not know my address','i will share it later')
         try:
+            external_reply=await self.external.handle(owner,text,picked,state)
+            if external_reply is not None:return external_reply
             if action=='check_payment' or low.strip() in ('check payment','check payment status'):
                 bid=picked.get('booking_id') if action else state.get('booking')
                 if not bid or bid!=state.get('booking'):raise Rejected('Check payment for your current booking')

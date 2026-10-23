@@ -1,0 +1,155 @@
+[
+  {
+    "name": "check_service_availability",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "service": {
+          "type": "string",
+          "description": "The service the user asked for, in their own words (e.g., 'assemble IKEA furniture')"
+        },
+        "city": {
+          "type": "string",
+          "description": "City name (e.g., New York, San Francisco)"
+        },
+        "state": {
+          "type": "string",
+          "description": "State/province abbreviation (e.g., NY, CA)"
+        },
+        "postalCode": {
+          "type": "string",
+          "description": "US postal code (e.g., 10001)",
+          "pattern": "^\\d{5}$"
+        }
+      },
+      "required": [
+        "service"
+      ],
+      "anyOf": [
+        {
+          "required": [
+            "city",
+            "state"
+          ]
+        },
+        {
+          "required": [
+            "postalCode"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "generate_deep_link",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "categoryId": {
+          "type": "string",
+          "description": "Category service key (e.g., 'furniture_assembly')"
+        },
+        "locale": {
+          "type": "string",
+          "description": "BCP 47 locale code (e.g., 'en-US')",
+          "enum": [
+            "en-US"
+          ]
+        },
+        "questionnaire": {
+          "type": "array",
+          "description": "Ordered list of question/answer pairs from the scoping conversation, including the job_size answer",
+          "items": {
+            "type": "object",
+            "required": [
+              "question",
+              "answer"
+            ],
+            "properties": {
+              "question": {
+                "type": "string",
+                "description": "The question that was asked"
+              },
+              "param": {
+                "type": "string",
+                "description": "Scoping question param key (e.g., 'job_size'). Use the param value from the scopingQuestions returned by check_service_availability."
+              },
+              "answer": {
+                "type": "string",
+                "description": "The answer to the question"
+              }
+            }
+          }
+        },
+        "location": {
+          "type": "object",
+          "description": "Location resolved from check_service_availability (address, postal code, and coordinates)",
+          "required": [
+            "address",
+            "postal_code",
+            "lat",
+            "lng"
+          ],
+          "properties": {
+            "address": {
+              "type": "string",
+              "description": "Street address or city/state description"
+            },
+            "postal_code": {
+              "type": "string",
+              "description": "US postal code (e.g., '10001')"
+            },
+            "lat": {
+              "type": "number",
+              "description": "Latitude"
+            },
+            "lng": {
+              "type": "number",
+              "description": "Longitude"
+            }
+          }
+        }
+      },
+      "required": [
+        "categoryId",
+        "locale",
+        "questionnaire",
+        "location"
+      ]
+    }
+  },
+  {
+    "name": "list_supported_services",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "city": {
+          "type": "string",
+          "description": "City name (e.g., New York, San Francisco)"
+        },
+        "state": {
+          "type": "string",
+          "description": "State/province abbreviation (e.g., NY, CA)"
+        },
+        "postalCode": {
+          "type": "string",
+          "description": "US postal code (e.g., 10001)",
+          "pattern": "^\\d{5}$"
+        }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "city",
+            "state"
+          ]
+        },
+        {
+          "required": [
+            "postalCode"
+          ]
+        }
+      ]
+    }
+  }
+]
