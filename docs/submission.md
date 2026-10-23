@@ -35,7 +35,7 @@ The optional FET path adds `PAYMENT_MODE=fet_testnet` on Dorado only. Eighteen l
 
 - Public GitHub repo: [arywk40-hue/ServiceSetu](https://github.com/arywk40-hue/ServiceSetu), published and public.
 - ASI:One conversation: full lifecycle observed in the signed-in existing chat. A public shared-chat URL and independent access check remain unverified. Private chat links are excluded from the repository and this handoff.
-- Concierge profile: [ServiceSetu-concierge](https://agentverse.ai/agents/details/agent1q02ftm6eu39lw0vc5kh3uhr4gtkkeqd6jpcaxzn4gyyrc2ac0p9ecvl39sz/profile), registered and active; fresh-account ASI:One discovery is unverified.
+- Concierge profile: [ServiceSetu-concierge](https://agentverse.ai/agents/details/agent1q02ftm6eu39lw0vc5kh3uhr4gtkkeqd6jpcaxzn4gyyrc2ac0p9ecvl39sz/profile), registered and active. It rendered without Agentverse sign-in, advertised ACP and Payment Protocol, and exposed a Chat with Agent link to ASI:One. Broad search from a fresh ASI:One account remains unverified.
 - Specialist/provider profiles: all thirteen names, addresses and verified URLs are in `artifacts/registration-manifest.json` and the README.
 - Demo video: the owner will record it; upload and final Devpost submission remain pending.
 
