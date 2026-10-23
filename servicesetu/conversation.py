@@ -6,13 +6,14 @@ import os
 from .core import Rejected
 from . import cards
 from .reasoning import Reasoner,rupees
-from .locations import clean_context,resolve,location_only,mentions,canonical,bare_location_answer,LOCATION_FIELDS
+from .locations import clean_context,resolve,location_only,mentions,canonical,bare_location_answer,LOCATION_FIELDS,suggestion,ALIASES
 from .coverage import requires_pin,location_label
 from .addresses import validate_address
 from .appointments import appointment
 from .catalogue import SERVICES,CATEGORIES,unavailable_message,package_from_text,detect_service
 from .service_details import FIELDS,extract_details,validate_details,next_question
 from .fet_payments import fet_amount as configured_fet_amount
+from .places import search_places, parse_places_intent, PlacesError, safe_maps_url
 from .external_conversation import ExternalConversation
 
 
@@ -166,7 +167,12 @@ class Conversation:
             for field in ('pending_address_quote','pending_booking_address','address_token','approval_token','availability_options','availability_token'):state.pop(field,None)
             self.store.save_session(owner,state)
             prefix='No available pilot business currently covers ' if any(p.get('record_kind')=='pilot' for p in self.store.providers()) else 'No onboarded demo provider currently covers '
-            return cards.envelope(prefix+location_label(job)+' for '+SERVICES[job['service']]['label']+'. Your location was accepted. No appointment was reserved or payment taken. You can provide a different locality, or request human review.')
+            place_lbl=location_label(job)
+            svc_lbl=SERVICES[job['service']]['label']
+            msg=prefix+place_lbl+' for '+svc_lbl+'. Your location was accepted. No appointment was reserved or payment taken. You can provide a different locality, or request human review.'
+            msg+=f"\n\nTo discover real local businesses on Google Maps, send: 'Find real {svc_lbl.lower()} in {place_lbl}'."
+            cta={'label':'Search Google Maps','selection':{'action':'places_search','service':job['service'],'location':place_lbl}}
+            return cards.envelope(msg,'detail',{'title':f'No onboarded coverage in {place_lbl}','summary_rows':[{'label':'Location','value':place_lbl},{'label':'Service','value':svc_lbl},{'label':'Onboarded status','value':'No onboarded providers'}],'ctas':[cta]})
         quotes=[]
         excluded=result["excluded"]
         for pid in result["providers"]:
@@ -212,6 +218,25 @@ class Conversation:
         try:
             external_reply=await self.external.handle(owner,text,picked,state)
             if external_reply is not None:return external_reply
+            if action=='view_maps':
+                name=picked.get('name','the business')
+                url=safe_maps_url(picked.get('url','https://maps.google.com'))
+                if not url:raise Rejected('Only an HTTPS Google Maps listing link can be opened.')
+                return cards.envelope(f"Google Maps listing for **{name}**:\n{url}\n\nFound on Google Maps; not onboarded to ServiceSetu.\nThis business is not an onboarded ServiceSetu provider. Appointments, pricing, and payments cannot be processed through ServiceSetu. Please contact them directly via Google Maps.")
+            if action=='places_search':
+                query=picked.get('query')
+                if not query:
+                    svc=picked.get('service')
+                    loc=picked.get('location') or picked.get('location_label') or picked.get('area') or picked.get('city')
+                    svc_label=SERVICES.get(svc,{}).get('label',svc) if svc else 'services'
+                    query=f"{svc_label} in {loc}" if loc else svc_label
+                try:
+                    places=await search_places(query)
+                    state['discovered_places']=[p['id'] for p in places if p.get('id')]
+                    self.store.save_session(owner,state)
+                    return cards.places_results(places,query,picked.get('location_label') or picked.get('location'))
+                except PlacesError as exc:
+                    return cards.places_error(str(exc))
             if action=='check_payment' or low.strip() in ('check payment','check payment status'):
                 bid=picked.get('booking_id') if action else state.get('booking')
                 if not bid or bid!=state.get('booking'):raise Rejected('Check payment for your current booking')
@@ -410,6 +435,9 @@ class Conversation:
                     return cards.envelope("Please finish the service address, or send 'cancel address' before changing the request. Nothing has been reserved or paid.")
                 return await self.review_address(owner,state,q,address,bus)
             if action=="select":
+                target_id=str(picked.get("quote_id") or picked.get("place_id") or "")
+                if target_id.startswith(("ChIJ","place_","places/")) or target_id in state.get("discovered_places",[]):
+                    raise Rejected("Businesses found on Google Maps are not onboarded to ServiceSetu. They cannot be booked, scheduled, or paid through ServiceSetu. Only onboarded providers with verified booking arrangements may be booked.")
                 if state.get("partial_job"):
                     return self.details_check(owner,state,state["partial_job"]) or cards.clarification(state["partial_job"])
                 qid=picked.get("quote_id")
@@ -424,6 +452,9 @@ class Conversation:
                     if address:return await self.review_address(owner,state,q,address['address_line'],bus)
                 return self.ask_address(owner,state,q)
             if action=="approve":
+                target_q=str(picked.get("quote_id") or "")
+                if target_q.startswith(("ChIJ","place_","places/")) or target_q in state.get("discovered_places",[]):
+                    raise Rejected("Businesses found on Google Maps are not onboarded to ServiceSetu and cannot be approved or paid.")
                 required={"booking_id":state.get("booking"),"quote_id":state.get("quote"),"approval_token":state.get("approval_token")}
                 if not all(required.values()) or any(picked.get(k)!=v for k,v in required.items()):
                     raise Rejected("Approval must match the current review card, quote and token")
@@ -481,14 +512,47 @@ class Conversation:
                 raise Rejected("Discretionary refunds, payout changes and verification overrides require human review")
             if low in ("help","hi","hello","what can you do",""):
                 return cards.job_form(self.store.providers()[0]["slots"][0])
+            confirmation=re.sub(r"[,.!]+"," ",low).strip()
+            confirmation=" ".join(confirmation.split())
+            if state.get("pending_places_query") and confirmation in ("yes","yes please","correct","that's right","yes that's right","yes correct","yes that's correct"):
+                pq=state.pop("pending_places_query")
+                self.store.save_session(owner,state)
+                try:
+                    places=await search_places(pq)
+                    state['discovered_places']=[p['id'] for p in places if p.get('id')]
+                    self.store.save_session(owner,state)
+                    return cards.places_results(places,pq)
+                except PlacesError as exc:
+                    return cards.places_error(str(exc))
+            places_intent=parse_places_intent(text)
+            if places_intent:
+                loc=places_intent.get("location")
+                if not loc:
+                    return cards.envelope("Please specify your city and locality in India to search for local businesses on Google Maps (for example, 'Find real plumbers in Mandi, Himachal Pradesh').")
+                proposal=None
+                compact_loc=loc.replace(" ","").lower()
+                for field in ('area','city'):
+                    sug=suggestion(loc,field)
+                    if sug and compact_loc not in ALIASES[field]:
+                        proposal=sug
+                        break
+                if proposal:
+                    state["pending_places_query"]=places_intent["query"].replace(loc,proposal)
+                    self.store.save_session(owner,state)
+                    return cards.envelope(f"Did you mean {proposal.title()}? Reply yes to search Google Maps there, or tell me the correct area and city. This searches local businesses, not a ServiceSetu booking.")
+                try:
+                    places=await search_places(places_intent["query"])
+                    state['discovered_places']=[p['id'] for p in places if p.get('id')]
+                    self.store.save_session(owner,state)
+                    return cards.places_results(places,places_intent["query"],loc)
+                except PlacesError as exc:
+                    return cards.places_error(str(exc))
             # Parsing is permitted only for intake. Model output cannot authorize payment.
             partial=clean_context(state.get("partial_job",{}))
             typed_location={}
             for field in ("quotes","quote","approval_token","availability_options","availability_token"):
                 state.pop(field,None)
             self.store.save_session(owner,state)
-            confirmation=re.sub(r"[,.!]+"," ",low).strip()
-            confirmation=" ".join(confirmation.split())
             if state.get("pending_location") and confirmation in ("yes","yes please","correct","that's right","yes that's right","yes correct","yes that's correct"):
                 job=dict(state["pending_location"])
             elif state.get("pending_location") and confirmation in ("no","no thanks","incorrect"):

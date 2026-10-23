@@ -81,6 +81,15 @@ def mentions(text):
             prefix=text[:city.start()].rstrip(' ,')
             area=re.search(r'\bin\s+([^,;\n]+)$',prefix,re.I)
             if area and canonical(area[1],'area'):found['area']=area[1].strip()
+    elif 'city' not in found and 'area' not in found:
+        in_match = re.search(r'\bin\s+([A-Za-zÀ-ž\s\'-]+?)(?:,\s*([A-Za-zÀ-ž\s\'-]+?))?(?=\s+(?:today|tomorrow|under|budget|at\b|\d{1,2}(?::\d{2})?\s*(?:am|pm)|\d{4}-)|[;.]|$)', text, re.I)
+        if in_match:
+            loc1 = in_match.group(1).strip()
+            loc2 = in_match.group(2).strip() if in_match.group(2) else None
+            non_loc = {'today', 'tomorrow', 'cash', 'advance', 'emergency', 'minutes', 'hours', 'service', 'services', 'cleaning', 'plumbing', 'ac', 'repair'}
+            if loc1.lower() not in non_loc and loc2 and loc2.lower() not in non_loc:
+                if canonical(loc1, 'area'): found['area'] = loc1
+                if canonical(loc2, 'city'): found['city'] = loc2
     return found
 
 

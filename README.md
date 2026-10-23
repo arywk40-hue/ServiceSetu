@@ -9,19 +9,24 @@ Book a trusted local service, approve the exact price, and recover when the prov
 
 **Current demo and narrow pilot:** [complete ASI:One steps, Razorpay/Stripe test setup, operator commands and evidence limits](docs/demo-pilot-runbook.md). Customer status cards now expose messages, completion, history and booking-linked problem reports. A trusted operator can configure one consenting plumbing business using the existing `p4` identity in an isolated pilot database; fictional alternatives are disabled there. No real provider has joined through this work.
 
-**Submission readiness:** the [current challenge audit](docs/showcase-readiness.md) records the latest 336-test pass, local AC recovery proof, rechecked public registrations, and the fresh ASI:One attempt blocked by intermittent message delivery and safe hold expiry. The prior 17-event mock chat is completed evidence; a verified public shared-chat URL and the owner's video remain required.
+**Submission readiness:** the [current challenge audit](docs/showcase-readiness.md) records the latest 343-test pass, local AC recovery proof, rechecked public registrations, and the fresh ASI:One attempt blocked by intermittent message delivery and safe hold expiry. The prior 17-event mock chat is completed evidence; a verified public shared-chat URL and the owner's video remain required.
 
-**Prototype only:** six fictional providers by default, twelve in the expanded demo, sixteen in the full catalogue; twelve service packages across cleaning, repairs, inspections and assembly. Location intake accepts Indian cities and localities with optional PIN codes; bookings require declared provider coverage. The original demo serves Indiranagar, Bengaluru; an optional demo copy adds fictional Powai, Mumbai branches. See [location intake and coverage](docs/nationwide-locations.md). Uses a mock credential registry; simulated or Stripe/Razorpay/FET **test-only** payments. Native FET is Dorado-only. No actual service, identity verification, real money, UPI integration, escrow or payout. “Verified” always refers to the mock registry. Provider-supplied documents are explicitly unverified.
+**Recording package:** [timed video script and observed chat history](docs/video-script.md), with Word copies in [deliverables](deliverables/README.md). Google Places is an optional locally tested adapter; live Google calls are disabled for this showcase.
+
+**Laptop shutdown:** registration does not host the backend. A persistent remote runtime is still required for fresh interaction while the laptop is off. See [free hosting constraints and migration steps](docs/hosting.md); no cloud deployment is claimed.
+
+**Prototype only:** six fictional providers by default, twelve in the expanded demo, sixteen in the full catalogue; twelve service packages across cleaning, repairs, inspections and assembly. Location intake accepts Indian cities and localities with optional PIN codes; bookings require declared provider coverage. The original demo serves Indiranagar, Bengaluru; an optional demo copy adds fictional Powai, Mumbai branches. See [location intake and coverage](docs/nationwide-locations.md) and [optional Google Places adapter](docs/places-discovery.md). Uses a mock credential registry; simulated or Stripe/Razorpay/FET **test-only** payments. Native FET is Dorado-only. No actual service, identity verification, real money, UPI integration, escrow or payout. “Verified” always refers to the mock registry. Provider-supplied documents are explicitly unverified.
 
 ## Start in 30 seconds, no keys required
 
 Python 3.10–3.13:
 
 ```sh
-python3 -m servicesetu prove --core-only
 python3 -m servicesetu demo
 python3 -m servicesetu chat
 ```
+
+For the full test suite, install the fetch, communications and external extras using the command below, then run `.venv/bin/python -m servicesetu prove --core-only`. No Google key or billable Google request is needed.
 
 `demo` prints the full booking, approval, cancellation, replacement approval and audit story, and writes `artifacts/demo-transcript.json`. `chat` offers the same flow in the terminal with simulated payment. This is a development surface; the intended customer surface is ACP inside ASI:One.
 
@@ -33,9 +38,9 @@ Windows PowerShell setup and existing-identity startup: [Windows guide](docs/win
 
 ```sh
 uv venv .venv
-uv pip install --python .venv/bin/python -e '.[fetch]'
-cp .env.example .env
-.venv/bin/python -m servicesetu prove
+uv pip install --python .venv/bin/python -e '.[fetch,communications,external]'
+# New checkout only: create private .env from .env.example; never overwrite an existing .env.
+.venv/bin/python -m servicesetu prove --core-only
 .venv/bin/python -m servicesetu prepare
 .venv/bin/python -m servicesetu mesh
 ```
@@ -105,6 +110,9 @@ Example prompts:
 ```text
 AC service in Indiranagar Bengaluru tomorrow 10am under INR 1000
 Plumbing in Indiranagar Bengaluru tomorrow 2pm under INR 600
+Find real plumbers in Mandi, Himachal Pradesh.
+Find AC service businesses in Indiranagar, Bengaluru.
+Find cleaning services in Powai, Mumbai.
 AC service in Indiranagar Bengaluru tomorrow 10am under INR 100
 I need surgery in Mumbai
 show what happened
@@ -193,7 +201,7 @@ One full command: `.venv/bin/python -m servicesetu prove`.
 | 10. Reconstruct booking history | `test_11`, actual mesh audit |
 | 11. Restricted actions gated | `test_12`, `test_13`, `test_17`, `test_18` |
 
-The suite contains **320 scenarios**, including **32 workflow-hardening checks, 14 Razorpay API-double checks, and 18 Dorado FET protocol/ledger-double checks and 22 external MCP checks** for retries, ownership, exact transfer verification, replay, expiry and refund status. Stripe and FET boundary checks use SDK/ledger doubles, not actual transactions. The full harness also exercises actual local uAgent booking/recovery flows across the twelve packages plus two location variants. The current 320-test source suite and a bounded local AC booking/recovery mesh smoke pass. An additional full catalogue rerun stalled after nine mesh workflows and is not counted as complete. Those checks prove binding and failure behavior locally; they do not claim a live gateway or wallet transaction. Routine evidence is written under ignored `artifacts/local/`; published examples remain under `artifacts/`. All use synthetic customer data. SQLite transactions and a unique active-slot index own reservation; quotes and events reject updates/deletes. File owners can still alter the database directly: append-only application audit is not cryptographic tamper-proof evidence. Shared SQLite is for a **single-machine Bureau**, not independently hosted Agentverse containers.
+The suite contains **343 scenarios**, including **32 workflow-hardening checks, 14 Razorpay API-double checks, and 18 Dorado FET protocol/ledger-double checks and 22 external MCP checks, plus 23 optional Google Places checks** for retries, ownership, exact transfer verification, replay, expiry and refund status. Stripe and FET boundary checks use SDK/ledger doubles, not actual transactions. The full harness also exercises actual local uAgent booking/recovery flows across the twelve packages plus two location variants. The current 343-test suite and a bounded local AC booking/recovery mesh smoke pass. An additional full catalogue rerun stalled after nine mesh workflows and is not counted as complete. Those checks prove binding and failure behavior locally; they do not claim a live gateway or wallet transaction. Routine evidence is written under ignored `artifacts/local/`; published examples remain under `artifacts/`. All use synthetic customer data. SQLite transactions and a unique active-slot index own reservation; quotes and events reject updates/deletes. File owners can still alter the database directly: append-only application audit is not cryptographic tamper-proof evidence. Shared SQLite is for a **single-machine Bureau**, not independently hosted Agentverse containers. Google Places is an optional adapter with mocked tests only; live Google queries are disabled for this showcase. See [video narration and observed chat history](docs/video-script.md).
 
 Two live integration checks have also passed:
 

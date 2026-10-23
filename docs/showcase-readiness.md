@@ -4,7 +4,15 @@ Checked 23 October 2026 against the ASI:One Agent Challenge statement supplied b
 
 The prior signed-in conversation visibly contains the full 17-event booking, cancellation and replacement journey. A fresh attempt in a separate conversation did **not** complete: outbound response delivery was intermittent, both unapproved holds expired safely, and no payment or confirmed booking was created. Do not describe this fresh attempt as passed.
 
+## October 24 publication review
+
+The remaining Google Places work originally added in Antigravity was preserved and reviewed for publication. It now has safe upstream error handling, HTTPS Google Maps link validation, bounded results, preservation of constrained booking requests, and optional HTTP dependency loading. **343 core tests passed in 34.247 seconds**, with zero failures/skips; the 23 targeted Google Places tests and the bounded local AC uAgent smoke also passed. Keep `GOOGLE_PLACES_API_KEY` unset: no live Google call, billing setup or Google card acceptance is claimed. The single October 24 runtime was reloaded with an explicit empty Google key, unchanged identities/database and mock payments. See the [timed video script and actual prior chat history](video-script.md).
+
+The mailbox issue is **not proven resolved**. An overnight provider mailbox log included HTTP 401 credential validation in addition to timeouts. Fresh signed read-only checks for Concierge, Matching and that provider returned HTTP 200 (0.47, 0.99 and 0.53 seconds). A successful new attestation does not explain the intermittent failure or prove end-to-end delivery. No additional email service is required: this mailbox is agent transport, not SMTP or Gmail.
+
 ## Mandatory requirements and deliverables
+
+The owner cannot keep a laptop running during judging. A persistent remote runtime is another unresolved availability requirement. [Free hosting options and migration steps](hosting.md) document the checked limits; no free VM, cloud deployment or remote restart/persistence check has been completed. Existing recorded evidence does not establish fresh availability while the laptop is off.
 
 | Requirement | Evidence and present status |
 | --- | --- |
@@ -14,7 +22,7 @@ The prior signed-in conversation visibly contains the full 17-event booking, can
 | Agent Chat Protocol | Concierge advertises the ACP digest. The signed-in ASI:One client rendered provider comparison, optional address and exact quote review cards. The prior full flow also rendered confirmation, cancellation/recovery and history. |
 | Discoverable and usable in ASI:One | The public Concierge Agentverse profile rendered without Agentverse sign-in, showed AgentChatProtocol v0.3.0 and AgentPaymentProtocol v0.1.0, and exposed a Chat with Agent link targeting ASI:One. Selecting `@servicesetu` worked in the authenticated ASI:One account. The direct [ASI:One Concierge profile](https://asi1.ai/ai/agent1q02ftm6eu39lw0vc5kh3uhr4gtkkeqd6jpcaxzn4gyyrc2ac0p9ecvl39sz) is documented. Broad search from a fresh ASI:One account remains unverified. |
 | Primary workflow inside one conversation | Prior completed mock journey observed in one conversation, including exact quote approval and fresh replacement approval. Latest fresh attempt remains incomplete because delivery failed and holds expired. No custom customer frontend is required. The provider cancellation command is an operator simulation of an external provider event. |
-| Public GitHub with run/test instructions | [arywk40-hue/ServiceSetu](https://github.com/arywk40-hue/ServiceSetu) was verified public through GitHub. Source commits `78e14e3` and `0ddd83a` contain FET and MCP work. Separately preserved Google Places edits are local and are not part of those source commits. |
+| Public GitHub with run/test instructions | [arywk40-hue/ServiceSetu](https://github.com/arywk40-hue/ServiceSetu) was verified public through GitHub. Source commits `78e14e3` and `0ddd83a` contain FET and MCP work. The October 24 publication review adds the preserved optional Google Places adapter; it is not part of those older FET/MCP commits. |
 | Public ASI:One Shared Chat URL | **Unresolved.** The completed private conversation is not a public submission link. The Share action did not expose a verifiable public URL. Obtain the public link through ASI:One and check it without the owner's authenticated session. Do not publish a private `/chat/` link. |
 | Agentverse profiles | [Concierge profile](https://agentverse.ai/agents/details/agent1q02ftm6eu39lw0vc5kh3uhr4gtkkeqd6jpcaxzn4gyyrc2ac0p9ecvl39sz/profile); all 13 public profile URLs and unchanged messaging identities are in [README](../README.md) and the [registration manifest](../artifacts/registration-manifest.json). |
 | Short demo video | **Owner action.** The owner will record it. No new video was generated or claimed. Use the sequence below. |
@@ -34,7 +42,7 @@ The precise remaining live blocker is reliable round-trip message delivery durin
 
 | Check | Actual result |
 | --- | --- |
-| Current workspace core suite | 336 tests passed in 28.752 seconds; 0 failed, 0 skipped. Includes 16 preserved local Google Places tests. |
+| October 23 workspace core suite | 336 tests passed in 28.752 seconds; 0 failed, 0 skipped. Includes 16 preserved local Google Places tests. |
 | First sandboxed core run | 336 tests ran; 4 errors because the sandbox denied provider-inbox localhost binding. Rerun with loopback access passed. This first run was not counted as a pass. |
 | Current local AC message smoke | Passed availability, shortlist, address, approval, confirmation, customer/provider messages, authenticated provider cancellation, replacement shortlist, fresh approval, replacement confirmation and audit. Uses real local uAgent envelopes with Almanac version lookups stubbed; it is not a live ASI:One run. |
 | Installed dependencies | `uv pip check` reported 66 compatible packages. |

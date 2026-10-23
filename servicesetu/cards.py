@@ -370,3 +370,118 @@ def booking_history(events, booking=None):
         lines.append("No booking events recorded yet.")
     lines.extend(["", "For all original record fields and references, send **audit details**."])
     return envelope("\n".join(lines))
+
+
+def places_results(places, query, location_label=None):
+    from .places import safe_maps_url
+    if not places:
+        return envelope(
+            f"No local businesses found on Google Maps for '{query}'.\n\n"
+            "Found on Google Maps; not onboarded to ServiceSetu.\n"
+            "Try searching with a broader area or different service wording. "
+            "No fictional demo providers were substituted."
+        )
+
+    lines = [
+        "Local businesses found on Google Maps:",
+        "Found on Google Maps; not onboarded to ServiceSetu.",
+        "These businesses have not registered with ServiceSetu. "
+        "Prices, appointments, service coverage and credential verification are not available. "
+        "Contact them directly on Google Maps.",
+    ]
+    items = []
+    for number, place in enumerate(places, start=1):
+        name = place["name"]
+        address = place.get("address")
+        is_service_area = place.get("is_service_area", False)
+        rating = place.get("rating")
+        review_count = place.get("review_count")
+        maps_url = safe_maps_url(place.get("google_maps_uri")) or "https://maps.google.com"
+
+        lines.extend(["", f"### {number}. {name}"])
+        if is_service_area:
+            lines.append("**Service Area:** Service-area business (serves customer location; no physical storefront)")
+        elif address:
+            lines.append(f"**Address:** {address}")
+        else:
+            lines.append("**Address:** Service-area / contact provider directly")
+
+        if rating is not None and review_count is not None:
+            rating_text = f"{rating} ★ ({review_count} Google reviews)"
+            lines.append(f"**Google rating:** {rating_text}")
+        elif rating is not None:
+            rating_text = f"{rating} ★ on Google"
+            lines.append(f"**Google rating:** {rating_text}")
+        else:
+            rating_text = "No Google rating available"
+            lines.append(f"**Google rating:** {rating_text}")
+
+        lines.append("**Status:** Found on Google Maps; not onboarded to ServiceSetu")
+        lines.append(f"**Listing:** [View on Google Maps]({maps_url})")
+
+        badges = [
+            {"label": "Found on Google Maps", "variant": "info"},
+            {"label": "Not onboarded to ServiceSetu", "variant": "warning"},
+        ]
+        if is_service_area:
+            badges.append({"label": "Service-area business", "variant": "info"})
+
+        items.append({
+            "id": place.get("id") or str(number),
+            "title": name,
+            "subtitle": "Service-area business" if is_service_area else (address or "Local business"),
+            "secondary_text": rating_text,
+            "badges": badges,
+            "primary_cta": {
+                "label": "View on Google Maps",
+                "selection": {
+                    "action": "view_maps",
+                    "place_id": place.get("id", ""),
+                    "name": name,
+                    "url": maps_url,
+                },
+            },
+        })
+
+    lines.extend([
+        "",
+        "---",
+        "**Powered by Google · Google Maps listing**",
+        "A Google listing or rating is not ServiceSetu credential verification. "
+        "To book and pay with ServiceSetu protections, use an onboarded provider.",
+    ])
+
+    if len(items) == 1:
+        return envelope(
+            "\n".join(lines),
+            "detail",
+            {
+                "title": "Local business · Google Maps",
+                "summary_rows": [
+                    {"label": "Business", "value": items[0]["title"]},
+                    {"label": "Location", "value": items[0]["subtitle"]},
+                    {"label": "Google rating", "value": items[0]["secondary_text"]},
+                    {"label": "Status", "value": "Found on Google Maps; not onboarded"},
+                ],
+                "ctas": [items[0]["primary_cta"]],
+            },
+        )
+
+    return envelope(
+        "\n".join(lines),
+        "carousel",
+        {
+            "title": "Local businesses on Google Maps",
+            "subtitle": "Found on Google Maps; not onboarded to ServiceSetu · Powered by Google",
+            "items": items,
+        },
+    )
+
+
+def places_error(error_message: str):
+    return envelope(
+        f"Google Places search could not be completed:\n{error_message}\n\n"
+        "Found on Google Maps; not onboarded to ServiceSetu.\n"
+        "No fictional demo providers were substituted. "
+        "You can retry with a different query or explore available demo services by sending 'show services'."
+    )
