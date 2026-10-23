@@ -1,6 +1,23 @@
 # ServiceSetu submission workbench
 
-Status: local proofs, all thirteen registrations, live ASI1 adapters and the actual mailbox workflow pass. ASI:One discovery/routing, rendered cards, Stripe test checkout and submission capture remain pending.
+Status (October 23, 2026): **280 local tests and 14 local uAgent workflows pass**. The earlier thirteen-registration, live ASI1 and hosted-mailbox evidence remains historical. The signed-in ASI:One session rendered provider comparison, quote review, a mock-paid confirmation, cancellation/refund status and a replacement offer. The replacement quote expired before approval. A fresh recovery request reached the backend, but its response was not observed in ASI:One because Agentverse delivery timed out. No complete live recovery/history flow is claimed. See the [current demo, payment and pilot runbook](demo-pilot-runbook.md).
+
+## Current implementation evidence
+
+Latest payment steering: Razorpay test support added, with 14 API-double tests passing; the final local suite records 280/280 passed, zero failed and zero skipped, plus 14/14 local uAgent workflows. Razorpay uses external hosted Payment Links and returns the customer to ASI:One for `check payment`; it is not native in-chat checkout. Both Razorpay test credentials were absent. The live mock chat rendered comparison/review, simulated confirmation, cancellation/refund status and a replacement offer; after the short hold expired, the fresh recovery response timed out and replacement approval/confirmation/history were not observed.
+
+- [x] Existing source, README, submission checklist, booking/payment/messaging/inbox/lifecycle implementation inspected at `bf708c2` before changes; baseline 234 tests passed with loopback access.
+- [x] Quote-bound approval, stored payment rail, same-checkout retry/resume, missing-commit/session-create recovery, late-payment compensation and refund failure behavior covered locally with Stripe SDK doubles.
+- [x] Customer/session ownership, assigned-provider cancellation, internal worker restrictions, idempotent completion and encrypted booking-linked reports covered locally.
+- [x] Existing status cards expose messaging, completion, history and problem reports, with text fallbacks.
+- [x] Private operator import/acceptance and problem acknowledgement commands; pilot labels distinguish real records from fictional data, and fictional alternatives are disabled in the pilot database.
+- [x] Final local proof harness: 280 tests (0 failed, 0 skipped) and 14 actual local uAgent scenarios; `artifacts/local/proof-results.json` records `passed: true`, `mesh: passed`. These are not live gateway evidence.
+- [x] October 23 live ASI:One: direct Concierge profile accessible, synthetic request reaches the running registered mesh, provider shortlist cards render; `status` recovers/refreshed the comparison after transport trouble.
+- [ ] Complete live ASI:One sequence through replacement approval, replacement confirmation and combined history. The earlier replacement offer rendered, but its quote expired before approval; fresh recovery delivery timed out.
+- [ ] Razorpay test authentication, hosted checkout, server capture confirmation and refund. `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` are absent; no gateway transaction is claimed.
+- [ ] Razorpay hosted checkout conflicts with the [official Fetch-A-Thon 3.0 mandatory requirement](https://innovationlab.fetch.ai/events/hackathons/fetch-a-thon-3/hackpack) that the complete primary user workflow be demonstrated entirely inside an ASI:One conversation. Use `PAYMENT_MODE=mock` for that all-in-chat demo; keep Razorpay as the separately tested hosted-checkout integration. The hackpack lists Payment Protocol as a bonus criterion, not a mandatory requirement. Checked October 23, 2026.
+- [ ] Stripe test authentication and actual embedded checkout/PaymentIntent/refund observed (optional rail). No gateway transaction is claimed.
+- [ ] Real business permission, actual services/prices/coverage/availability, exact manual checks and per-booking provider acceptance. None has been obtained by this task.
 
 ## Links to record after verification
 
@@ -22,7 +39,7 @@ Do not replace these with invented links or present local dispatch as an ASI:One
 - [ ] A fresh ASI:One account discovers Concierge and completes the full workflow.
 - [ ] Form, shortlist, review and status cards render in the client.
 - [ ] Both JSON selections and planner prose work; ambiguous approvals fail safely.
-- [ ] Embedded Stripe TEST payment completes inside the chat and verifies server-side.
+- [ ] Razorpay TEST payment (hosted external checkout) returns to ASI:One and verifies server-side. For the mandatory all-in-chat primary workflow demo, use the already implemented mock payment path until checkout is embedded or the official rules change.
 - [ ] Duplicate commit returns the same booking and only one test gateway payment.
 - [ ] Expired hold never confirms; late test payment is refunded.
 - [ ] Provider cancellation arrives as an actual agent notice and opens recovery.

@@ -25,6 +25,7 @@ from .evidence import evidence_path
 from .core import Store,Rejected
 from .service import Services
 from .conversation import Conversation,strip_recipient
+from .transport import send_customer,delivered
 
 
 class Work(Model):
@@ -126,6 +127,18 @@ def create_mesh(store=None,offline=None,reasoner=None,payment_mode=None):
     concierge=agents["concierge"]
     conversation=Conversation(store,reasoner)
 
+    async def send_reply(ctx,customer,reply):
+        # Only acknowledge notices covered by this actual customer response.
+        bid=reply.get('notice_booking');last=0
+        if bid:
+            with store.connect() as db:last=db.execute('SELECT COALESCE(MAX(event),0) FROM booking_notices WHERE booking=?',(bid,)).fetchone()[0]
+        result=await send_customer(ctx,customer,chat_message(reply))
+        if not delivered(result):ctx.logger.warning('Customer reply delivery failed; booking/payment state retained. Customer can send status to retry.')
+        if bid and delivered(result):
+            with store.tx() as db:
+                for kind in reply.get('notice_kinds',[]):
+                    db.execute('UPDATE booking_notices SET sent=1 WHERE booking=? AND event<=? AND event IN (SELECT seq FROM events WHERE kind=?)',(bid,last,kind))
+
     def register_worker(role,agent):
         proto=Protocol(name="ServiceSetuMesh",version="0.1.0")
         @proto.on_message(model=Work,replies={Result})
@@ -163,10 +176,10 @@ def create_mesh(store=None,offline=None,reasoner=None,payment_mode=None):
                 payment=reply["payment"]
                 b=payment["booking"]
                 q=store.get_quote(b["quote"],owner)
-                await ctx.send(sender,RequestPayment(accepted_funds=[Funds(currency="INR",amount=f"{q['amount']/100:.2f}",payment_method="stripe")],
+                await send_customer(ctx,sender,RequestPayment(accepted_funds=[Funds(currency="INR",amount=f"{q['amount']/100:.2f}",payment_method="stripe")],
                     recipient=concierge.address,deadline_seconds=max(1,int(b["hold_until"]-store.clock())),reference=b["id"],
                     description="ServiceSetu fictional service · Stripe TEST payment",metadata={"stripe":payment["stripe"],"service":"servicesetu_test"}))
-            await ctx.send(sender,chat_message(reply))
+            await send_reply(ctx,sender,reply)
         except Exception:
             ctx.logger.error("Concierge failed; no outcome assumed")
             await ctx.send(sender,chat_message(envelope("I could not finish this request. Ask for status before retrying; persisted booking/payment intents are retained.")))
@@ -174,8 +187,10 @@ def create_mesh(store=None,offline=None,reasoner=None,payment_mode=None):
 
     @concierge.on_interval(period=10)
     async def reply_notices(ctx:Context):
-        from .notifications import notify_customers
-        try:await notify_customers(store,ctx)
+        from .notifications import notify_customers,notify_bookings
+        try:
+            await notify_bookings(store,ctx)
+            await notify_customers(store,ctx)
         except Exception:ctx.logger.warning('Provider reply notice unavailable; stored messages remain available')
 
 
@@ -189,21 +204,20 @@ def create_mesh(store=None,offline=None,reasoner=None,payment_mode=None):
             if not row or row["owner"].rsplit(":",1)[0]!=sender: raise Rejected("Payment belongs to another customer")
             if msg.funds.payment_method!="stripe": raise Rejected("Expected Stripe test payment")
             owner=row["owner"]
+            if owner!=sender+':'+str(ctx.session):raise Rejected('Payment belongs to another conversation')
             b=await MeshBus(ctx,addresses).call("payment","commit",owner,booking=bid,transaction=msg.transaction_id,
                 currency=msg.funds.currency,amount=msg.funds.amount,recipient=msg.recipient,expected_recipient=concierge.address)
             if b["state"]=="confirmed": await ctx.send(sender,CompletePayment(transaction_id=msg.transaction_id))
             else: await ctx.send(sender,CancelPayment(transaction_id=msg.transaction_id,reason="Expired reservation; test payment reversed or queued for review"))
-            await ctx.send(sender,chat_message(booking_status(b,store.get_quote(b["quote"],owner))))
+            await send_reply(ctx,sender,booking_status(b,store.get_quote(b["quote"],owner)))
         except (Rejected,TimeoutError) as exc:
             await ctx.send(sender,CancelPayment(transaction_id=msg.transaction_id,reason=str(exc)))
 
     @seller.on_message(model=RejectPayment)
     async def reject_payment(ctx:Context,sender:str,msg:RejectPayment):
-        owner=sender+":"+str(ctx.session)
-        state=store.session(owner)
-        if state.get("booking"):
-            await MeshBus(ctx,addresses).call("payment","cancel",owner,booking=state["booking"])
-        await ctx.send(sender,chat_message(envelope("Test checkout rejected. Ask for a fresh quote.")))
+        # RejectPayment carries no booking/session reference. A delayed rejection
+        # must never cancel a newer or confirmed booking in this conversation.
+        await ctx.send(sender,chat_message(envelope("Test checkout was rejected. Send status to review your booking, then cancel booking if you want to release it. A checkout rejection alone does not cancel a booking.")))
     concierge.include(seller,publish_manifest=not offline)
 
     @concierge.on_message(model=ProviderCancelled)
@@ -219,8 +233,11 @@ def create_mesh(store=None,offline=None,reasoner=None,payment_mode=None):
         customer_ctx=copy.copy(ctx)
         customer_ctx._session=UUID(msg.owner.rsplit(":",1)[1])
         reply=await conversation.quotes(MeshBus(customer_ctx,addresses),msg.owner,state["job"],msg.booking)
+        reply['text']='Your provider cancelled the booking. '+('Refund required; not yet confirmed.' if b['payment_state']=='refund_required' else 'Review the original booking history for its test-payment reversal status.')+'\n\n'+reply['text']
         customer=msg.owner.rsplit(":",1)[0]
-        await customer_ctx.send(customer,chat_message(reply))
+        reply['notice_booking']=msg.booking
+        reply['notice_kinds']=['provider_cancelled']
+        await send_reply(customer_ctx,customer,reply)
 
     def register_cancel(role,agent):
         provider=role.split(":",1)[1]
@@ -250,7 +267,7 @@ def create_mesh(store=None,offline=None,reasoner=None,payment_mode=None):
         if old.get("paused")!=paused:
             with store.tx() as db: store.event(db,"trust_monitor","eligibility_refresh","trust_monitor",paused=paused)
             store.save_session("system:trust_monitor",{"paused":paused})
-        if services.payments.mode=="stripe_test":
+        if services.payments.mode in ("stripe_test","razorpay_test"):
             await asyncio.to_thread(reconcile,services)
 
     port=int(os.getenv("SERVICESETU_PORT","8000"))
@@ -260,26 +277,8 @@ def create_mesh(store=None,offline=None,reasoner=None,payment_mode=None):
 
 
 def reconcile(services):
-    """Poll persisted test checkout references; recover a lost CommitPayment."""
-    s=services.store
-    with s.connect() as db:
-        rows=db.execute("SELECT b.owner,b.id,p.external,p.amount,p.state FROM bookings b JOIN payments p ON p.booking=b.id WHERE p.external IS NOT NULL AND p.state IN ('pending','refund_required')").fetchall()
-    for r in rows:
-        try:
-            if r["state"]=="refund_required": services.payments.refund(r["owner"],r["id"]);continue
-            stripe=services.payments.stripe()
-            session=stripe.checkout.Session.retrieve(r["external"])
-            b=s.booking(r["id"],r["owner"])
-            if session.payment_status=="paid":
-                if session.livemode or session.amount_total!=r["amount"] or session.currency!="inr" or session.metadata.get("owner")!=r["owner"] or session.metadata.get("booking_id")!=r["id"] or session.client_reference_id!=r["id"]:
-                    s.denied(r["id"],"Checkout reconciliation binding mismatch","payment");continue
-                b=s.settle(r["owner"],r["id"],external=r["external"])
-                if b["payment_state"]=="refund_required": services.payments.refund(r["owner"],r["id"])
-            elif b["hold_until"]<=s.clock() or b["state"]=="cancelled":
-                if session.status=="open": stripe.checkout.Session.expire(r["external"])
-                s.settle(r["owner"],r["id"],success=False)
-        except Exception:
-            s.denied(r["id"],"Gateway reconciliation retry required","payment")
+    """Compatibility entry point for the monitor and existing proof tools."""
+    services.payments.reconcile()
 
 
 def main():

@@ -50,6 +50,12 @@ CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY AUTOINCREMENT,
  at REAL NOT NULL, entity TEXT NOT NULL, kind TEXT NOT NULL, actor TEXT NOT NULL,
  payload TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS sessions(id TEXT PRIMARY KEY, payload TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS booking_notices(
+ event INTEGER PRIMARY KEY REFERENCES events(seq),booking TEXT NOT NULL,
+ attempts INTEGER NOT NULL DEFAULT 0,next_attempt REAL NOT NULL DEFAULT 0,sent INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS gateway_operations(
+ booking TEXT NOT NULL REFERENCES bookings(id),operation TEXT NOT NULL,
+ external TEXT,PRIMARY KEY(booking,operation));
 CREATE TRIGGER IF NOT EXISTS no_quote_update BEFORE UPDATE ON quotes
  BEGIN SELECT RAISE(ABORT,'immutable quote'); END;
 CREATE TRIGGER IF NOT EXISTS no_quote_delete BEFORE DELETE ON quotes
@@ -75,6 +81,9 @@ class Store:
         Path(self.path).parent.mkdir(parents=True, exist_ok=True)
         with self.connect() as db:
             db.executescript(SCHEMA)
+            if 'mode' not in {r['name'] for r in db.execute('PRAGMA table_info(payments)')}:
+                db.execute("ALTER TABLE payments ADD COLUMN mode TEXT NOT NULL DEFAULT 'mock'")
+                db.execute("UPDATE payments SET mode='stripe_test' WHERE external IS NOT NULL")
             sql=db.execute("SELECT sql FROM sqlite_master WHERE name='bookings'").fetchone()[0]
             if "'requested'" not in sql:
                 self.migrate_requests(db)
@@ -119,8 +128,10 @@ class Store:
             db.close()
 
     def event(self, db, entity, kind, actor="system", **payload):
-        db.execute("INSERT INTO events(at,entity,kind,actor,payload) VALUES(?,?,?,?,?)",
+        row=db.execute("INSERT INTO events(at,entity,kind,actor,payload) VALUES(?,?,?,?,?)",
                    (self.clock(), entity, kind, actor, encode(payload)))
+        if kind in ('booking_confirmed','payment_compensated','provider_cancelled','stripe_test_refunded','razorpay_test_refunded'):
+            db.execute('INSERT INTO booking_notices(event,booking) VALUES(?,?)',(row.lastrowid,entity))
 
     def denied(self, entity, reason, actor):
         with self.tx() as db:
@@ -162,7 +173,7 @@ class Store:
                   "source": "seeded provider upload" if i in (1,4,7,10,13,15) else "mock-registry://servicesetu",
                   "checked_at": now.isoformat(), "expires": expiry, "method": "mock_lookup",
                   "verifier": "demo-verification-agent", "policy_version": "IN-demo-v1"},
-                 "available": True}
+                 "available": True,"record_kind":"demo"}
             if full_catalogue and i in (6,7,8):
                 p["offerings"]=dict(CLEANING_OFFERINGS[p["id"]])
             if extended_catalogue and p["id"] in EXTENDED_OFFERINGS:
@@ -204,7 +215,7 @@ class Store:
         day = datetime.fromisoformat(slot).date().isoformat()
         today = datetime.fromtimestamp(self.clock(), ZoneInfo("Asia/Kolkata")).date().isoformat()
         status = "expired" if c["expires"] < max(day, today) else c["status"]
-        return dict(c, status=status, eligible=status in ("verified", "provider_supplied"))
+        return dict(c, status=status, eligible=status in ("verified", "provider_supplied", "manually_reviewed"))
 
     def slot_free(self,provider,slot):
         with self.connect() as db:
@@ -309,12 +320,13 @@ class Store:
                 "service":service,**({"details":details} if details else {}),
                 **({'address_required':True} if address_required else {}),
                 "location":{field:job[field] for field in ('city','area','pincode','country') if field in job} if job else {'city':p['city'],'area':p['area']},
-                "kind": "fixed", "scope": quote_scope(service,details),
-                "exclusions": SERVICES[service]["exclusions"],
-                "cancellation": "Demo: full test-payment reversal before work starts",
+                "kind": "fixed", "record_kind":p.get('record_kind','demo'),
+                "scope": p.get('pilot_scope',quote_scope(service,details)),
+                "exclusions": p.get('pilot_exclusions',SERVICES[service]["exclusions"]),
+                "cancellation": "Full test-payment reversal before work starts; no real money collected",
                 "trust": self.trust(p, slot), "expires": self.clock()+300,
                 "availability": {"source": f"provider-agent:{provider}", "observed_at": self.clock(),
-                    "expires": self.clock()+300, "confidence": "provider-confirmed demo", "hold_capable": True}}
+                    "expires": self.clock()+300, "confidence": "operator-entered pilot availability" if p.get('record_kind')=='pilot' else "provider-confirmed demo", "hold_capable": True}}
             digest = hashlib.sha256(encode(payload).encode()).hexdigest()
             db.execute("INSERT INTO quotes VALUES(?,?,?,?,?,?,?,?,?,?)", (qid, provider, slot, owner, version,
                        amount, payload["expires"], encode(payload), digest, previous))
@@ -435,7 +447,9 @@ class Store:
         if not row: raise Rejected("Booking not found in this conversation")
         result=dict(row)
         with self.connect() as db:
+            payment=db.execute('SELECT mode FROM payments WHERE booking=?',(bid,)).fetchone()
             address=db.execute("SELECT payload FROM events WHERE entity=? AND kind='service_address_recorded' ORDER BY seq DESC LIMIT 1",(bid,)).fetchone()
+        result['payment_mode']=payment['mode'] if payment else None
         if address:result['service_address']=json.loads(address[0])['address']
         return result
 
@@ -446,10 +460,11 @@ class Store:
             if self.get_quote(qid,owner).get('address_required') and not self.booking(bid,owner).get('service_address') and not self.address_deferred(bid):
                 raise Rejected('A service address is required before approval')
             if b["state"] != "held" or b["hold_until"] <= self.clock(): raise Rejected("Hold expired; refresh before approving")
-            db.execute("UPDATE bookings SET approved=1 WHERE id=?", (bid,))
-            self.event(db,bid,"customer_approved",owner,quote=qid)
+            if not b['approved']:
+                db.execute("UPDATE bookings SET approved=1 WHERE id=?", (bid,))
+                self.event(db,bid,"customer_approved",owner,quote=qid)
 
-    def begin_payment(self, owner, bid, idem):
+    def begin_payment(self, owner, bid, idem, mode='mock'):
         with self.tx() as db:
             b = db.execute("SELECT * FROM bookings WHERE id=? AND owner=?", (bid,owner)).fetchone()
             if not b or not b["approved"]: raise Rejected("Explicit customer approval required before payment")
@@ -458,10 +473,15 @@ class Store:
             old = db.execute("SELECT * FROM payments WHERE idem=? OR booking=?", (idem,bid)).fetchone()
             if old:
                 if old["booking"] != bid or old["idem"] != idem: raise Rejected("Idempotency key conflict")
+                if old['mode']!=mode:raise Rejected('Payment mode changed; reconcile the original test payment first')
+                if old['state']=='pending' and (b['state']!='held' or b['hold_until']<=self.clock()):
+                    raise Rejected('Hold expired or cancelled; payment reconciliation is pending')
                 return dict(old)
             if b["state"] != "held" or b["hold_until"] <= self.clock(): raise Rejected("Hold expired before payment")
             q = db.execute("SELECT * FROM quotes WHERE id=?",(b["quote"],)).fetchone()
             provider=self.provider(b["provider"])
+            if provider.get('record_kind')=='pilot' and not db.execute("SELECT 1 FROM events WHERE entity=? AND kind='pilot_booking_accepted' AND json_extract(payload,'$.quote')=?",(bid,b['quote'])).fetchone():
+                raise Rejected('Awaiting operator confirmation with the provider. Retry this approval after acceptance while the hold is active, or request a fresh quote')
             location=json.loads(q['payload']).get('location',{'city':provider['city'],'area':provider['area']})
             if not covers(provider,location):raise Rejected("Provider no longer covers this location; no payment started")
             if json.loads(q["payload"]).get("service",provider["service"]) not in provider_services(provider):
@@ -469,16 +489,21 @@ class Store:
             if q["expires"] <= self.clock() or not self.trust(self.provider(b["provider"]),b["slot"])["eligible"]:
                 raise Rejected("Quote or credential revalidation failed")
             pid = ident("pay")
-            db.execute("INSERT INTO payments VALUES(?,?,?,?,?,?)",(pid,bid,idem,q["amount"],"pending",None))
+            if not provider['available'] or b['slot'] not in provider['slots']:raise Rejected('Provider availability changed; no payment started')
+            db.execute("INSERT INTO payments(id,booking,idem,amount,state,external,mode) VALUES(?,?,?,?,?,?,?)",(pid,bid,idem,q["amount"],"pending",None,mode))
             db.execute("UPDATE bookings SET payment_state='pending' WHERE id=?",(bid,))
             self.event(db,bid,"payment_started",owner,payment=pid,amount=q["amount"],quote=b["quote"])
-        return {"id":pid,"booking":bid,"idem":idem,"amount":q["amount"],"state":"pending","external":None}
+        return {"id":pid,"booking":bid,"idem":idem,"amount":q["amount"],"state":"pending","external":None,'mode':mode}
 
-    def attach_checkout(self, owner, bid, checkout):
+    def attach_checkout(self, owner, bid, checkout, mode='stripe_test'):
         self.booking(bid,owner)
         with self.tx() as db:
-            db.execute("UPDATE payments SET external=? WHERE booking=? AND state='pending'", (checkout,bid))
-            self.event(db,bid,"stripe_test_checkout_created",owner,checkout=checkout)
+            old=db.execute('SELECT external FROM payments WHERE booking=?',(bid,)).fetchone()
+            if not old:raise Rejected('Payment intent missing')
+            if old['external'] and old['external']!=checkout:raise Rejected('Checkout already bound to another session')
+            if not old['external']:
+                db.execute("UPDATE payments SET external=? WHERE booking=? AND state='pending'", (checkout,bid))
+                self.event(db,bid,mode+"_checkout_created",owner,checkout=checkout)
 
     def settle(self, owner, bid, *, success=True, provider_confirm=True, external=None):
         """Called by mock adapter or only after server-side Stripe verification."""
@@ -492,6 +517,8 @@ class Store:
             p = self.provider(b["provider"])
             fresh = b["state"] == "held" and b["hold_until"] > self.clock() and q["expires"] > self.clock()
             fresh = fresh and p["available"] and b["slot"] in p["slots"] and self.trust(p,b["slot"])["eligible"]
+            payload=json.loads(q['payload'])
+            fresh=fresh and covers(p,payload.get('location',p)) and payload.get('service',p['service']) in provider_services(p)
             if success and provider_confirm and fresh:
                 db.execute("UPDATE payments SET state='paid',external=COALESCE(?,external) WHERE booking=?",(external,bid))
                 db.execute("UPDATE bookings SET state='confirmed',payment_state='paid' WHERE id=?",(bid,))
@@ -508,8 +535,11 @@ class Store:
         with self.tx() as db:
             b = db.execute("SELECT * FROM bookings WHERE id=? AND owner=?",(bid,owner)).fetchone()
             if not b: raise Rejected("Booking not found")
+            if actor not in ('customer',owner,'provider:'+str(b['provider'])):raise Rejected('Cancellation actor is not assigned to this booking')
             if b["state"] == "cancelled": return dict(b)
             if b["state"] == "completed": raise Rejected("Completed work requires human dispute review")
+            payment=db.execute('SELECT mode FROM payments WHERE booking=?',(bid,)).fetchone()
+            stripe=stripe or bool(payment and payment['mode'] in ('stripe_test','razorpay_test'))
             state = ("refund_required" if stripe else "refunded") if b["payment_state"]=="paid" else b["payment_state"]
             db.execute("UPDATE bookings SET state='cancelled',payment_state=? WHERE id=?",(state,bid))
             db.execute("UPDATE payments SET state=? WHERE booking=?",(state,bid))
@@ -517,15 +547,17 @@ class Store:
             self.event(db,bid,"slot_released",actor)
         return self.booking(bid,owner)
 
-    def refund_done(self, owner, bid, refund_id):
+    def refund_done(self, owner, bid, refund_id, mode='stripe_test'):
         self.booking(bid,owner)
         with self.tx() as db:
-            db.execute("UPDATE payments SET state='refunded' WHERE booking=? AND state='refund_required'",(bid,))
+            changed=db.execute("UPDATE payments SET state='refunded' WHERE booking=? AND state='refund_required'",(bid,)).rowcount
             db.execute("UPDATE bookings SET payment_state='refunded' WHERE id=? AND payment_state='refund_required'",(bid,))
-            self.event(db,bid,"stripe_test_refunded",refund=refund_id)
+            if changed:self.event(db,bid,mode+"_refunded",refund=refund_id)
 
     def complete(self, owner, bid):
         with self.tx() as db:
+            old=db.execute('SELECT state FROM bookings WHERE id=? AND owner=?',(bid,owner)).fetchone()
+            if old and old['state']=='completed':return
             changed = db.execute("UPDATE bookings SET state='completed' WHERE id=? AND owner=? AND state='confirmed'",(bid,owner)).rowcount
             if not changed: raise Rejected("Only a confirmed booking can complete")
             self.event(db,bid,"service_completed",owner)

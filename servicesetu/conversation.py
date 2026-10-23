@@ -150,7 +150,8 @@ class Conversation:
             state.update(job=job,partial_job=job,quotes=[],intent=intent['id'],recovery_of=recovery_of)
             for field in ('pending_address_quote','pending_booking_address','address_token','approval_token','availability_options','availability_token'):state.pop(field,None)
             self.store.save_session(owner,state)
-            return cards.envelope('No onboarded demo provider currently covers '+location_label(job)+' for '+SERVICES[job['service']]['label']+'. Your location was accepted. No appointment was reserved or payment taken. You can provide a different locality, or request human review.')
+            prefix='No available pilot business currently covers ' if any(p.get('record_kind')=='pilot' for p in self.store.providers()) else 'No onboarded demo provider currently covers '
+            return cards.envelope(prefix+location_label(job)+' for '+SERVICES[job['service']]['label']+'. Your location was accepted. No appointment was reserved or payment taken. You can provide a different locality, or request human review.')
         quotes=[]
         excluded=result["excluded"]
         for pid in result["providers"]:
@@ -194,6 +195,44 @@ class Conversation:
         low=text.lower()
         skip_address=low.strip() in ('skip','skip for now','skip address','not now','later','add it later','provide later',"i'll provide it later",'i will provide it later',"i don't know my address",'i do not know my address','i will share it later')
         try:
+            if action=='check_payment' or low.strip() in ('check payment','check payment status'):
+                bid=picked.get('booking_id') if action else state.get('booking')
+                if not bid or bid!=state.get('booking'):raise Rejected('Check payment for your current booking')
+                b=await bus.call('payment','refresh',owner,booking=bid)
+                return cards.booking_status(b,self.store.get_quote(b['quote'],owner))
+            if action=='resume_checkout' or low.strip()=='resume checkout':
+                bid=picked.get('booking_id') if action else state.get('booking')
+                if bid!=state.get('booking') or not bid:raise Rejected('Resume the current booking checkout')
+                b=self.store.booking(bid,owner)
+                if not b['approved']:raise Rejected('Review and explicitly approve the exact quote before checkout')
+                result=await bus.call('payment','start',owner,booking=bid)
+                if result.get('razorpay'):return cards.razorpay_checkout(result)
+                if result.get('stripe'):return dict(cards.envelope('Resume the same Stripe TEST checkout. No new payment or booking is created by retrying.'),payment=result)
+                return cards.booking_status(result['booking'],self.store.get_quote(b['quote'],owner))
+            problem=re.fullmatch(r'\s*report (?:a )?problem\s*:\s*(.+)',text,re.I|re.S)
+            if action=='problem_form' or low.strip() in ('report a problem','report problem'):
+                bid=picked.get('booking_id') if action else state.get('booking')
+                b=self.store.booking(bid,owner)
+                if b['state'] not in ('confirmed','completed','cancelled') or not b['quote']:raise Rejected('Choose a confirmed, completed or cancelled booking')
+                nonce='rp_'+secrets.token_hex(16);state.update(problem_booking=bid,problem_token=nonce);self.store.save_session(owner,state)
+                return cards.envelope('Describe the problem for the trusted operator. This records a report; it does not promise a refund or resolution. Do not include payment credentials.', 'form',{'title':'Report a booking problem','fields':[{'name':'problem','kind':'text','label':'What happened?','required':True}],'submit_cta':{'label':'Record report','selection':{'action':'report_problem','booking_id':bid,'problem_token':nonce}}})
+            if problem or action=='report_problem':
+                bid=state.get('problem_booking') if action else state.get('booking')
+                if action and (not state.get('problem_token') or picked.get('booking_id')!=bid or picked.get('problem_token')!=state.get('problem_token')):raise Rejected('Use the latest problem form for your booking')
+                result=await bus.call('booking','report_problem',owner,booking=bid,text=picked.get('problem') if action else problem[1],client_id=request_id or (state.get('problem_token') if action else None))
+                return cards.envelope('Problem report recorded for operator review. Reference: '+result['id']+'. This is an acknowledgement of receipt, not a resolution or refund. Send show what happened to see the report in your booking history.')
+            if action=='completion_review':
+                bid=picked.get('booking_id');b=self.store.booking(bid,owner)
+                if b['state']!='confirmed':raise Rejected('Only a confirmed booking can complete')
+                nonce='done_'+secrets.token_hex(16);state.update(completion_booking=bid,completion_token=nonce);self.store.save_session(owner,state)
+                return cards.envelope('Confirm only after the service is finished. You can still report a problem after completion.','review',{'title':'Confirm service completion','summary_rows':[{'label':'Provider','value':self.store.get_quote(b['quote'],owner)['name']}],'approve_cta':{'label':'Work is finished','selection':{'action':'confirm_completion','booking_id':bid,'completion_token':nonce}},'reject_cta':{'label':'Keep booking open','selection':{'action':'keep_booking_open','booking_id':bid}}})
+            if action=='keep_booking_open':
+                b=self.store.booking(picked.get('booking_id'),owner)
+                return cards.booking_status(b,self.store.get_quote(b['quote'],owner))
+            if action=='confirm_completion':
+                if not state.get('completion_token') or picked.get('completion_token')!=state['completion_token'] or picked.get('booking_id')!=state.get('completion_booking'):raise Rejected('Use the latest completion review')
+                b=await bus.call('booking','complete',owner,booking=picked['booking_id'])
+                return cards.booking_status(b,self.store.get_quote(b['quote'],owner))
             message=re.match(r'^\s*(?:message|tell)\s+(?:the\s+)?provider\s*:\s*(.*)$',text,re.I|re.S)
             if message or action=='message_provider':
                 bid=state.get('message_form_booking') if action else state.get('booking')
@@ -373,6 +412,7 @@ class Conversation:
                 if b["state"]=="confirmed": return cards.booking_status(b,self.store.get_quote(state["quote"],owner))
                 await bus.call("booking","approve",owner,booking=bid,quote=state["quote"])
                 result=await bus.call("payment","start",owner,booking=bid)
+                if result.get('razorpay'):return cards.razorpay_checkout(result)
                 if result.get("stripe"):
                     return dict(cards.envelope("Approved. Complete the embedded Stripe TEST checkout. The slot hold lasts two minutes; a late successful payment is refunded rather than confirming an expired slot."),payment=result)
                 return cards.booking_status(result["booking"],self.store.get_quote(state["quote"],owner))
@@ -395,11 +435,17 @@ class Conversation:
                     return cards.envelope("Immutable timeline (test data):\n"+"\n".join(f"#{e['seq']} {e['kind']} · {json.dumps(e['payload'],sort_keys=True)}" for e in result["events"]))
                 return cards.booking_history(result["events"], self.store.booking(state["booking"],owner))
             if low in ("status","booking status"):
-                if not state.get("booking"): raise Rejected("No booking yet")
+                if not state.get("booking"):
+                    if state.get('quotes'):
+                        quotes=[self.store.get_quote(qid,owner) for qid in state['quotes']]
+                        if all(q['expires']>self.store.clock() for q in quotes):return cards.shortlist(quotes,[])
+                        return await self.quotes(bus,owner,state['job'],state.get('recovery_of'))
+                    raise Rejected("No booking yet")
                 b=await bus.call("booking","status",owner,booking=state["booking"])
                 return cards.booking_status(b,self.store.get_quote(b["quote"],owner))
-            if low in ("recover","find a replacement","provider cancelled"):
+            if low in ("recover","find a replacement","provider cancelled") or action=='recover_booking':
                 if not state.get("booking"): raise Rejected("No cancelled booking to recover")
+                if action and picked.get('booking_id')!=state['booking']:raise Rejected('Recover the current cancelled booking; use a new request for another booking')
                 return await self.quotes(bus,owner,state["job"],state["booking"])
             if low=="complete service":
                 if not state.get("booking"): raise Rejected("No confirmed booking yet")

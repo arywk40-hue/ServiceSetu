@@ -24,6 +24,9 @@ class Services:
         if role.startswith("provider:") and action=="quote":
             return s.quote(owner,role.split(":",1)[1],data["slot"],data.get("previous"),job=data.get("job"),address_required=data.get('address_required',False))
         if role=="booking":
+            if action=='report_problem':
+                from .problems import Problems
+                return Problems(s).report(owner,data['booking'],data['text'],data.get('client_id'))
             if action=='provide_address':return s.provide_address(owner,data['booking'],data['address'])
             if action in ('message','messages'):
                 from .communications import Messaging
@@ -41,6 +44,7 @@ class Services:
                 s.complete(owner,data["booking"])
                 return s.booking(data["booking"],owner)
         if role=="payment":
+            if action=='refresh':return self.payments.refresh(owner,data['booking'])
             if action=="start": return self.payments.start(owner,data["booking"])
             if action=="commit": return self.payments.commit(owner,data["booking"],data["transaction"],data["currency"],data["amount"],data["recipient"],data["expected_recipient"])
             if action=="cancel": return self.payments.cancel(owner,data["booking"],data.get("actor","customer"))

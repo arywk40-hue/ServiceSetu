@@ -51,7 +51,7 @@ def chat_message(reply):
 
 
 def job_form(default_slot):
-    return envelope("ServiceSetu demo uses fictional providers and test payments. Tell me the service, area, preferred day and time, and maximum budget in normal language, or use this form. Availability will be checked for your requested date.","form",{
+    return envelope("ServiceSetu uses test payments only. Provider records identify fictional demos or a manually entered pilot business. Tell me the service, area, preferred day and time, and maximum budget in normal language, or use this form. Availability will be checked for your requested date.","form",{
         "title":"Find a local service · test data", "fields":[
             {"name":"service","kind":"select","label":"Service package","required":True,"options":[{"value":key,"label":item.get("package",item["label"])} for key,item in SERVICES.items() if item["bookable"]]},
             {"name":"city","kind":"text","label":"City in India","required":True},
@@ -114,19 +114,22 @@ def acknowledge(reply, user_text):
 
 
 def document_label(trust):
+    if trust['status']=='manually_reviewed':
+        return 'Manual review only: '+ '; '.join(trust.get('checked_items',[]))+'; no independent credential verification'
     return ("Checked against a fictional mock registry — demo only"
             if trust["status"]=="verified" else "Provider-supplied — not independently verified")
 
 
 def shortlist(quotes, excluded, explanation="", recovery=False):
     lines = ["Recovery alternatives — your replacement needs approval." if recovery else "Provider-confirmed demo quotes:",
-             "Fictional providers and test payments only."]
+             "Provider records are labelled below. Test payments only."]
     if explanation and len(quotes)>1: lines.extend(["", explanation])
     items = []
     for number,q in enumerate(quotes,start=1):
         trust=q["trust"]
         label=document_label(trust)
         lines.extend(["",f"### {number}. {q['name']} — INR {q['amount']/100:.2f}",
+                      '**Record:** '+('Real pilot business · entered with permission' if q.get('record_kind')=='pilot' else 'Fictional demo provider'),
                       f"**Appointment:** {appointment_label(q['slot'])}",f"**Documents:** {label}",
                       f"**Includes:** {q['scope']}",f"**Not included:** {q['exclusions']}"])
         if q.get('location'):lines.append('**Location:** '+location_label(q['location']))
@@ -138,7 +141,7 @@ def shortlist(quotes, excluded, explanation="", recovery=False):
         lines.extend(f"- **{p['name']}:** {p['reason']}" for p in excluded)
     lines.extend(["", "**Next:** Choose a provider card or reply 'option 1', 'option 2', and so on.",
                   "This opens the quote review. Payment requires your separate approval."])
-    return envelope("\n".join(lines),"carousel",{"title":"Choose a replacement" if recovery else "Choose a provider", "subtitle":"Seeded demo · INR · slot freshness checked again at approval", "items":items})
+    return envelope("\n".join(lines),"carousel",{"title":"Choose a replacement" if recovery else "Choose a provider", "subtitle":"Test payments · INR · availability checked again at approval", "items":items})
 
 
 def address_choice(q,nonce):
@@ -170,6 +173,8 @@ def review(q,b,nonce):
     rows.insert(2,('Service address',b['service_address']['address_line'] if b.get('service_address') else 'Not provided — you can add it after booking'))
     text="Review before approving:\n"+"\n".join(f"{k}: {v}" for k,v in rows)
     text+="\nChoose Approve test payment to confirm, or Release slot to cancel this review."
+    text+=f"\nText approval fallback: approve {b['id']} {q['id']} {nonce}"
+    text+='\nRecord: '+('Real pilot business; operator must accept this booking before payment.' if q.get('record_kind')=='pilot' else 'Fictional demo provider.')
     if b.get('service_address'):text+="\nTo correct the address before approval, send 'change address'."
     return envelope(text,"review",{"title":"Approve this test booking", "summary_rows":[{"label":k,"value":v} for k,v in rows],
          "approve_cta":{"label":"Approve test payment","selection":dict(selection,action="approve"),"primary":True},
@@ -177,13 +182,33 @@ def review(q,b,nonce):
 
 
 def booking_status(b,q):
+    mode='Razorpay TEST transaction' if b.get('payment_mode')=='razorpay_test' else 'Stripe TEST transaction' if b.get('payment_mode')=='stripe_test' else 'Simulated payment · no gateway charge' if b.get('payment_mode')=='mock' else 'No payment started'
     text=(f"Booking status: {b['state']}.\n\n**Provider:** {q['name']}\n"
           f"**Appointment:** {appointment_label(q['slot'])}\n**Total:** INR {q['amount']/100:.2f}\n"
           f"**Test payment:** {b['payment_state'].replace('_',' ')}\n\n"
-          "Use the options below to view your messages or booking history.")
+          f"**Payment rail:** {mode}\n\n"
+          "Send show what happened for history, report a problem for operator review, or status to refresh.")
+    if b['state']=='confirmed':text+='\nSend message provider: YOUR MESSAGE to coordinate the visit, or complete service to confirm the work is finished.'
+    if b['state']=='cancelled':text+='\nSend recover to review eligible replacements within the original constraints. Fresh approval is required.'
+    if b['state']=='held' and b['approved']:text+='\nYour exact quote approval is saved. Send resume checkout to retry the same payment while the hold remains active.'
     if b.get('service_address'):text+='\n**Service address:** '+b['service_address']['address_line']+', '+location_label(b['service_address'])
-    return envelope(text,"detail",{"title":f"Booking {b['state']} · test mode", "summary_rows":[
-        {"label":"Provider","value":q["name"]},{"label":"Appointment","value":appointment_label(q["slot"])},{"label":"Test payment","value":b["payment_state"].replace('_',' ')}],"ctas":([{'label':'Add address','selection':{'action':'add_address','booking_id':b['id']}}] if not b.get('service_address') else [])+[{'label':'Message provider','selection':{'action':'compose_message','booking_id':b['id']}},{'label':'View messages','selection':{'action':'open_messages','booking_id':b['id']}},{'label':'Booking history','selection':{'action':'booking_history','booking_id':b['id']}}] if b['state']=='confirmed' else []},terminal=True)
+    ctas=[{'label':'Booking history','selection':{'action':'booking_history','booking_id':b['id']}}]
+    if b['state'] in ('confirmed','completed','cancelled'):ctas.append({'label':'Report a problem','selection':{'action':'problem_form','booking_id':b['id']}})
+    if b['state']=='confirmed':
+        ctas.extend([{'label':'Message provider','selection':{'action':'compose_message','booking_id':b['id']}},{'label':'View messages','selection':{'action':'open_messages','booking_id':b['id']}},{'label':'Confirm completion','selection':{'action':'completion_review','booking_id':b['id']}}])
+        if not b.get('service_address'):ctas.insert(0,{'label':'Add address','selection':{'action':'add_address','booking_id':b['id']}})
+    if b['state']=='cancelled':ctas.append({'label':'Find replacements','selection':{'action':'recover_booking','booking_id':b['id']}})
+    if b['state']=='held' and b['approved']:ctas.append({'label':'Resume test checkout','selection':{'action':'resume_checkout','booking_id':b['id']}})
+    if b.get('payment_mode')=='razorpay_test' and b['payment_state'] in ('pending','refund_required'):ctas.append({'label':'Check test payment','selection':{'action':'check_payment','booking_id':b['id']}})
+    return dict(envelope(text,"detail",{"title":f"Booking {b['state']} · test mode", "summary_rows":[
+        {"label":"Provider","value":q["name"]},{"label":"Appointment","value":appointment_label(q["slot"])},{"label":"Test payment","value":b["payment_state"].replace('_',' ')},{'label':'Payment rail','value':mode}],"ctas":ctas},terminal=True),notice_booking=b['id'],notice_kinds=(['booking_confirmed'] if b['state'] in ('confirmed','completed') else ['provider_cancelled','payment_compensated'] if b['state']=='cancelled' else [])+(['stripe_test_refunded','razorpay_test_refunded'] if b['payment_state']=='refunded' else []))
+
+
+def razorpay_checkout(result):
+    b=result['booking'];url=result['razorpay']['url']
+    return envelope('Your exact quote approval is saved. Open [Razorpay TEST checkout]('+url+') to complete a test payment on Razorpay’s hosted page, then return to this ASI:One conversation and send check payment. This is a test gateway transaction, not a simulated payment. A late captured payment cannot confirm an expired hold and requires a test refund. Booking confirmation appears only after server verification.',
+                    'detail',{'title':'Razorpay TEST checkout','summary_rows':[{'label':'Checkout','value':'Hosted Razorpay page; return here after payment'},{'label':'Payment status','value':'Pending server verification'}],
+                              'ctas':[{'label':'Check test payment','selection':{'action':'check_payment','booking_id':b['id']}}]})
 
 
 def message_notice(bid):
@@ -238,7 +263,7 @@ def booking_history(events, booking=None):
             "declined": "Test payment declined.",
         }.get(state, "No completed payment reversal recorded.")
 
-    lines = ["Booking history (test data)", "Fictional services and test payments only."]
+    lines = ["Booking history (test payments)", "Provider records identify demo or pilot origin; all payments are test only."]
     if booking:
         current_quote = quotes.get(booking.get("quote"), {})
         lines.extend(["", "### Current booking", f"**Status:** {booking['state'].replace('_', ' ').title()}"])
@@ -251,6 +276,7 @@ def booking_history(events, booking=None):
                          "refunded": "Reversed", "refund_required": "Refund required; not yet confirmed",
                          "voided": "Voided", "declined": "Declined"}.get(payment, payment.replace("_", " "))
         lines.append(f"**Test payment:** {payment_label}")
+        lines.append('**Payment rail:** '+('Razorpay TEST' if booking.get('payment_mode')=='razorpay_test' else 'Stripe TEST' if booking.get('payment_mode')=='stripe_test' else 'Simulated · no gateway charge' if booking.get('payment_mode')=='mock' else 'No payment started'))
     lines.extend(["", "### Full history", "Every recorded event is listed below. All times are IST."])
     previous_day = None
     for number, event in enumerate(events, start=1):
@@ -300,16 +326,21 @@ def booking_history(events, booking=None):
             text = "Temporary reservation expired; a fresh quote is required."
         elif kind == "payment_compensated":
             text = f"Booking could not be confirmed. {reversal(payload.get('payment_state'))}"
-        elif kind == "stripe_test_refunded":
+        elif kind in ("stripe_test_refunded","razorpay_test_refunded"):
             text = "Test refund confirmed."
         elif kind == "action_rejected":
             text = "Request could not proceed: " + payload.get("reason", "Please review the booking status.")
         elif kind == "service_completed":
             text = f"Service with {name} marked completed."
+        elif kind=='problem_reported':text='Problem report recorded for operator review. No refund or resolution has been promised.'
+        elif kind=='problem_acknowledged':text='Operator acknowledged the problem report; this does not mean it is resolved.'
+        elif kind=='pilot_booking_accepted':text='Operator recorded provider acceptance of this exact booking and quote.'
         elif kind == "slot_released":
             text = "Reserved appointment released."
         elif kind == "stripe_test_checkout_created":
             text = "Stripe test checkout created; payment is not yet confirmed."
+        elif kind=='razorpay_test_checkout_created':text='Razorpay test checkout link created; payment is not yet confirmed.'
+        elif kind=='razorpay_test_capture_verified':text='Razorpay test capture verified server-side against the booking, order and approved total.'
         if not text:
             text = kind.replace("_", " ").capitalize() + ". See 'audit details' for the recorded information."
         at = datetime.fromtimestamp(event["at"], ZoneInfo("Asia/Kolkata"))

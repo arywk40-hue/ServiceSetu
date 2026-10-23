@@ -90,7 +90,7 @@ def prove(include_mesh=True):
         report={"test_data":True,"passed":result.wasSuccessful(),"scenarios":result.records,"mesh":"not_run"}
         if result.wasSuccessful() and include_mesh and importlib.util.find_spec("uagents"):
             from .mesh_smoke import smoke
-            for service in ("ac","cleaning","electrical","kitchen_cleaning","sofa_cleaning","washing_machine","furniture","mattress_cleaning","carpet_cleaning","refrigerator","water_purifier"):
+            for service in ("ac","plumbing","cleaning","electrical","kitchen_cleaning","sofa_cleaning","washing_machine","furniture","mattress_cleaning","carpet_cleaning","refrigerator","water_purifier"):
                 asyncio.run(smoke(service))
             for service in ('ac','sofa_cleaning'):asyncio.run(smoke(service,nationwide=True))
             report["mesh"]="passed"

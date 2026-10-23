@@ -51,7 +51,8 @@ class Messaging:
             data=path.read_bytes()
         except FileNotFoundError:
             with self.store.connect() as db:
-                if db.execute('SELECT 1 FROM booking_messages LIMIT 1').fetchone():raise Rejected('Messaging key is missing; restore it before reading or sending messages')
+                has_reports=db.execute("SELECT 1 FROM sqlite_master WHERE name='booking_problems'").fetchone()
+                if db.execute('SELECT 1 FROM booking_messages LIMIT 1').fetchone() or (has_reports and db.execute('SELECT 1 FROM booking_problems LIMIT 1').fetchone()):raise Rejected('Messaging key is missing; restore it before reading or sending messages')
             key=secrets.token_bytes(SecretBox.KEY_SIZE)
             data=b'DPAPI1\n'+_protect(key,True) if os.name=='nt' else b'RAW1\n'+key
             try:

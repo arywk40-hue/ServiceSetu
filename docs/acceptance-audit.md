@@ -1,5 +1,7 @@
 # Prototype completion audit · October 13, 2026
 
+This is a historical October 13 audit. For the October 23 implementation and verification, see [submission status](submission.md) and the [demo/pilot runbook](demo-pilot-runbook.md). The final local proof output now records 280 tests and 14 local uAgent workflows passed. The later signed-in ASI:One demo rendered a mock confirmation, cancellation/refund status and replacement offer, but replacement approval/confirmation/history were not completed live. Razorpay test credentials are absent; no actual gateway transactions are claimed. No real business has been onboarded.
+
 The requested final state is the Fetch-A-Thon prototype in Parts II–III of the attached brief. Production pilot phases and Tier 3 bonuses are later work; they are not represented as completed. A green local suite does not prove remote registration or ASI:One completion.
 
 | Requirement | Authoritative evidence | Status |
@@ -15,8 +17,8 @@ The requested final state is the Fetch-A-Thon prototype in Parts II–III of the
 | “Why not” exclusions | Expired credential, budget and occupied-slot proofs | Verified locally |
 | Form JSON and planner prose selections | Intake/card tests; exact review identifiers checked | Verified locally; planner wording/rendering needs live acceptance |
 | Customer approval tied to quote, booking and review token | Approval tests, stale-reject and session-isolation tests | Verified locally |
-| Payment Protocol and Stripe test session binding | Installed seller spec, Payment adapter, SDK-double tests | Locally verified; real test checkout/commit missing |
-| Whole workflow entirely in ASI:One | Local dispatch is not an ASI:One session | Not achieved |
+| Payment Protocol and Stripe/Razorpay test session binding | Installed seller spec, payment adapters and SDK/API-double tests | Locally verified; real test checkout/commit missing |
+| Whole workflow entirely in ASI:One | Current [Fetch-A-Thon 3.0 hackpack](https://innovationlab.fetch.ai/events/hackathons/fetch-a-thon-3/hackpack) makes this mandatory; hosted Razorpay leaves chat | Mock confirmation renders in chat; complete replacement/history still not observed live |
 | Failure paths: expired hold, race, declined and duplicate payment | Automated proofs | Verified locally on mock rail |
 | No orphan slot/payment after failure | Compensation proofs, pending gateway intent/reconciliation path | Local behavior verified; gateway behavior needs live test |
 | Immutable accepted quote versions | Core append-only quote table and revision test | Verified locally |
@@ -33,4 +35,4 @@ The requested final state is the Fetch-A-Thon prototype in Parts II–III of the
 | Devpost problem/users/outcome description | Draft in `docs/submission.md` | Draft ready; submission not achieved |
 | Runtime running through judging | Local mailbox runtime is active and remotely tested; persistent hosting through judging is not established | Not achieved |
 
-ASI1 and Agentverse credentials are configured privately and verified. All thirteen registrations and the live mailbox booking/recovery flow pass. The ASI:One personal AI currently fails to find the registered Concierge, so discovery/routing is still being investigated; API transport is not a substitute for that requirement. Stripe test keys remain absent. Required next gates are ASI:One routing and rendered cards, actual test checkout, fresh-account discovery, shared chat, video and Devpost submission. Preserve `SERVICESETU_SEED`. The active goal remains incomplete.
+The final local suite and saved proof artifact pass; those checks do not substitute for the mandatory end-to-end ASI:One scene. The October 23 signed-in session rendered the original mock booking and cancellation/recovery response, but the replacement quote expired and a fresh response timed out during Agentverse delivery. Razorpay TEST credentials remain absent. Use `PAYMENT_MODE=mock` to keep the demonstrated primary workflow in chat; Razorpay hosted checkout is a separate external integration path. Preserve `SERVICESETU_SEED`. No new business has joined.

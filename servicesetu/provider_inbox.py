@@ -84,10 +84,14 @@ def run(store,provider,port=8765):
     store.provider(provider)
     server=make_server(store,port)
     token=Messaging(store).issue_access(provider)
+    import os
+    token_path=Path(store.path).with_name('provider-'+provider+'-'+__import__('secrets').token_hex(4)+'.token')
+    fd=os.open(token_path,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+    with os.fdopen(fd,'w') as out:out.write(token)
     print(f'Local provider inbox: http://127.0.0.1:{server.server_port}/')
     print('Provider:',provider)
-    print('Private access token (expires in one hour; do not share or publish):',token)
-    print('This portal is available only on this PC. Use fictional demo data.')
+    print('Private access token saved locally to',token_path,'(expires in one hour; do not publish).')
+    print('This inbox is available only on this PC. Operator-supervised pilot or fictional demo use only.')
     try:server.serve_forever()
     except KeyboardInterrupt:pass
     finally:

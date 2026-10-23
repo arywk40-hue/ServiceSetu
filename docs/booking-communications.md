@@ -37,7 +37,7 @@ $env:SERVICESETU_DB = 'data/demo-nationwide.db'
 .\.venv\Scripts\python.exe -m servicesetu provider-inbox --provider p1
 ```
 
-The command prints a local URL and a private token. Open `http://127.0.0.1:8765/` and paste the token into the password field. `p1` is CoolCare AC; `p2` is Breeze AC. Choose the actual assigned provider. A different provider will see no booking rather than the customer's information.
+The command prints a local URL and the path of an ignored, owner-only `.token` file; it never prints the token. Open that file locally, then paste the token into the password field at `http://127.0.0.1:8765/`. `p1` is CoolCare AC; `p2` is Breeze AC. Choose the actual assigned provider. A different provider will see no booking rather than the customer's information. For the operator-supervised single-business pilot, see the [pilot runbook](demo-pilot-runbook.md).
 
 The token lasts one hour. Starting another inbox for that provider revokes its earlier token; normal shutdown revokes the current token. Tokens are stored only as hashes. Browser credentials stay in memory, not local/session storage or URLs. Lock inbox clears the displayed details; five minutes without an API action locks it automatically. Expired/revoked credentials require fresh local provisioning. Keep tokens private and do not paste them into the customer chat, screenshots, issue reports or GitHub.
 
