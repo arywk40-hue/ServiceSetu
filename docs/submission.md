@@ -1,10 +1,10 @@
 # ServiceSetu submission workbench
 
-Status (October 23, 2026): **280 local tests and 14 local uAgent workflows pass**. The earlier thirteen-registration, live ASI1 and hosted-mailbox evidence remains historical. The signed-in ASI:One session rendered provider comparison, quote review, a mock-paid confirmation, cancellation/refund status and a replacement offer. The replacement quote expired before approval. A fresh recovery request reached the backend, but its response was not observed in ASI:One because Agentverse delivery timed out. No complete live recovery/history flow is claimed. See the [current demo, payment and pilot runbook](demo-pilot-runbook.md).
+Status (October 23, 2026): **280 local checks passed, plus 14 local uAgent workflows**. In the signed-in existing ASI:One Concierge chat, the full mock customer journey rendered: quote comparison and review, explicit approval, simulated confirmation, provider cancellation/reversal, fresh replacement quote and approval, replacement confirmation, and combined 17-event history. Both bookings preserved the service, area, appointment and INR 1,000 budget. This does not prove a gateway transaction or fresh-account/public chat access. The first replacement quote expired safely; a fresh quote was used. Razorpay test credentials remain absent. See the [current demo, payment and pilot runbook](demo-pilot-runbook.md).
 
 ## Current implementation evidence
 
-Latest payment steering: Razorpay test support added, with 14 API-double tests passing; the final local suite records 280/280 passed, zero failed and zero skipped, plus 14/14 local uAgent workflows. Razorpay uses external hosted Payment Links and returns the customer to ASI:One for `check payment`; it is not native in-chat checkout. Both Razorpay test credentials were absent. The live mock chat rendered comparison/review, simulated confirmation, cancellation/refund status and a replacement offer; after the short hold expired, the fresh recovery response timed out and replacement approval/confirmation/history were not observed.
+Razorpay test support has 14 API-double tests in the 280-test passing suite. Razorpay uses external hosted Payment Links and returns the customer to ASI:One for `check payment`; it is not native in-chat checkout. Both Razorpay test credentials were absent. The completed mock chat kept the customer workflow in ASI:One and used no external payment page. No gateway transaction is claimed.
 
 - [x] Existing source, README, submission checklist, booking/payment/messaging/inbox/lifecycle implementation inspected at `bf708c2` before changes; baseline 234 tests passed with loopback access.
 - [x] Quote-bound approval, stored payment rail, same-checkout retry/resume, missing-commit/session-create recovery, late-payment compensation and refund failure behavior covered locally with Stripe SDK doubles.
@@ -13,7 +13,7 @@ Latest payment steering: Razorpay test support added, with 14 API-double tests p
 - [x] Private operator import/acceptance and problem acknowledgement commands; pilot labels distinguish real records from fictional data, and fictional alternatives are disabled in the pilot database.
 - [x] Final local proof harness: 280 tests (0 failed, 0 skipped) and 14 actual local uAgent scenarios; `artifacts/local/proof-results.json` records `passed: true`, `mesh: passed`. These are not live gateway evidence.
 - [x] October 23 live ASI:One: direct Concierge profile accessible, synthetic request reaches the running registered mesh, provider shortlist cards render; `status` recovers/refreshed the comparison after transport trouble.
-- [ ] Complete live ASI:One sequence through replacement approval, replacement confirmation and combined history. The earlier replacement offer rendered, but its quote expired before approval; fresh recovery delivery timed out.
+- [x] Complete signed-in ASI:One mock sequence through approval, simulated confirmation, provider cancellation/reversal, fresh replacement approval, replacement confirmation and combined history. The first expired replacement quote was rejected and not reused.
 - [ ] Razorpay test authentication, hosted checkout, server capture confirmation and refund. `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` are absent; no gateway transaction is claimed.
 - [ ] Razorpay hosted checkout conflicts with the [official Fetch-A-Thon 3.0 mandatory requirement](https://innovationlab.fetch.ai/events/hackathons/fetch-a-thon-3/hackpack) that the complete primary user workflow be demonstrated entirely inside an ASI:One conversation. Use `PAYMENT_MODE=mock` for that all-in-chat demo; keep Razorpay as the separately tested hosted-checkout integration. The hackpack lists Payment Protocol as a bonus criterion, not a mandatory requirement. Checked October 23, 2026.
 - [ ] Stripe test authentication and actual embedded checkout/PaymentIntent/refund observed (optional rail). No gateway transaction is claimed.
@@ -22,7 +22,7 @@ Latest payment steering: Razorpay test support added, with 14 API-double tests p
 ## Links to record after verification
 
 - Public GitHub repo: [arywk40-hue/ServiceSetu](https://github.com/arywk40-hue/ServiceSetu), published and public.
-- ASI:One shared chat: pending full live conversation.
+- ASI:One conversation: full lifecycle observed in the signed-in existing chat; a private link is retained in the local handoff. Fresh-account/public link access remains unverified.
 - Concierge profile: [ServiceSetu-concierge](https://agentverse.ai/agents/details/agent1q02ftm6eu39lw0vc5kh3uhr4gtkkeqd6jpcaxzn4gyyrc2ac0p9ecvl39sz/profile), registered and active; fresh-account ASI:One discovery is unverified.
 - Specialist/provider profiles: all thirteen names, addresses and verified URLs are in `artifacts/registration-manifest.json` and the README.
 - Demo video: pending live platform capture.
@@ -46,7 +46,7 @@ Do not replace these with invented links or present local dispatch as an ASI:One
 - [ ] Replacement requires new consent and respects appointment/budget limits.
 - [ ] Public audit export matches the accepted quote and payment reference.
 - [ ] Public GitHub README contains actual addresses, profile URLs and chat link.
-- [x] Public GitHub source and run instructions published; exact seed-derived addresses included. Live profile URLs and shared chat remain pending.
+- [x] Public GitHub source and run instructions published; exact seed-derived addresses included. The successful full-flow chat was observed in the existing signed-in account. Fresh-account discovery and public accessibility of the share link remain pending.
 - [ ] No secrets, seed files, database files or customer data are published.
 - [ ] 3–5 minute video, description and links entered in Devpost.
 - [ ] Runtime kept alive through judging.
