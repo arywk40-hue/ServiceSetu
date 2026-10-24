@@ -16,9 +16,10 @@ from mcp.server.transport_security import TransportSecuritySettings
 
 from servicesetu.external_mcp import (MCPGateway, ExternalError, DiscoveredTools,
     RequestLimits, result_data, clean_text)
-from servicesetu.discovery import TomTom, Taskrabbit, coordinates, normalize_locations
+from servicesetu.discovery import TomTom, Taskrabbit, coordinates, normalize_locations, public_business_phone
 from servicesetu.external_conversation import ExternalConversation
 from servicesetu.external_cards import price_text
+from servicesetu.external_cards import tomtom_results
 from servicesetu.conversation import Conversation
 from servicesetu.core import Store
 from servicesetu.service import Services, LocalBus
@@ -70,7 +71,35 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(results),1);self.assertFalse(results[0]['onboarded'])
         name,args=gateway.session.calls[0]
         self.assertEqual((name,args['countries'],args['idxSet'],args['limit']),('tomtom-fuzzy-search',['IN'],'POI',5))
+        self.assertEqual(args['response_detail'],'full')
         self.assertEqual(gateway.runs[0],('tomtom','alice:session',True))
+
+    async def test_public_listing_phone_is_retained_without_onboarding_or_booking(self):
+        row=feature();row['properties']['poi']['phone']='+91 90000 00000'
+        gateway=GatewayDouble({'tomtom-fuzzy-search':{'features':[row]}})
+        result=await TomTom(gateway).search('plumbers','Mandi, Himachal Pradesh')
+        self.assertEqual(result[0]['phone'],'+91 90000 00000')
+        self.assertFalse(result[0]['onboarded'])
+        card=tomtom_results(result)
+        self.assertIn('Public listing phone: +91 90000 00000',card['text'])
+        self.assertIn('ServiceSetu has not called, verified, reserved or charged',card['text'])
+        payload=json.loads(card['metadata']['card_payload'])
+        self.assertNotIn('primary_cta',payload['items'][0])
+
+    async def test_malformed_or_missing_listing_phone_is_not_rendered(self):
+        for bad in (None,123,{},'javascript:alert(1)','+91 90000 00000\nsecret','+123','1'*16):
+            self.assertIsNone(public_business_phone(bad))
+            row=feature();row['properties']['poi']['phone']=bad
+            result=normalize_locations({'features':[row]},businesses=True)
+            self.assertNotIn('phone',result[0])
+            self.assertNotIn('Public listing phone:',tomtom_results(result)['text'])
+
+    async def test_geocode_does_not_expose_phone_as_a_business_contact(self):
+        row=feature();row['properties']['poi']['phone']='+91 90000 00000'
+        result=normalize_locations({'features':[row]},businesses=False)
+        self.assertNotIn('phone',result[0])
+        result[0]['phone']='+91 90000 00000'
+        self.assertNotIn('Public listing phone:',tomtom_results(result,geocoding=True)['text'])
 
     async def test_geocode_handles_geojson_and_empty_results(self):
         gateway=GatewayDouble({'tomtom-geocode':[{'features':[feature(business=False)]},{'features':[]}]})
@@ -188,9 +217,13 @@ class BackendConversationTests(unittest.IsolatedAsyncioTestCase):
     async def test_india_refusal_and_map_results_do_not_touch_booking_tables(self):
         refusal=await self.say('Taskrabbit plumber in Mandi, Himachal Pradesh')
         self.assertIn('unavailable in India',refusal['text']);self.assertEqual(self.gateway.session.calls,[])
-        self.gateway.session.responses['tomtom-fuzzy-search']={'features':[feature()]}
+        listing = feature()
+        listing['properties']['poi']['phone'] = '+91 90000 00000'
+        self.gateway.session.responses['tomtom-fuzzy-search']={'features':[listing]}
         result=await self.say('TomTom plumbers in Mandi, Himachal Pradesh')
         self.assertIn('not onboarded',result['text']);self.assertNotIn('payment',result)
+        self.assertIn('Public listing phone: +91 90000 00000',result['text'])
+        self.assertNotIn('primary_cta',self.card(result)['items'][0])
         self.no_booking_or_payment()
 
     async def test_task_scoping_explicit_review_and_retries_do_not_confirm_booking(self):

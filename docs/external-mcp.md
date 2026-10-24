@@ -52,7 +52,7 @@ In the existing Concierge conversation, select `@servicesetu` and try:
 - `Taskrabbit plumber in Mandi, Himachal Pradesh`
 - For a deliberately requested US demonstration only: `Taskrabbit services in US 10001` or `Taskrabbit furniture assembly in US 10001`.
 
-TomTom returns at most five Indian location or business matches. It uses `tomtom-geocode`, `tomtom-fuzzy-search` (POI index, without guessed category codes), and `tomtom-routing`, only when the live server exposes them. Search returns businesses discovered through TomTom, with an explicit not-onboarded/not-verified label. It does not import providers, issue quotes, reserve slots or take payment. Routes require two unambiguous geocoded locations, use GeoJSON longitude/latitude order, and show meters/seconds as km/minute estimates. They do not represent technician availability, tracking or dispatch. Empty results do not fall back to fictional providers.
+TomTom returns at most five Indian location or business matches. It uses `tomtom-geocode`, `tomtom-fuzzy-search` (POI index, without guessed category codes), and `tomtom-routing`, only when the live server exposes them. Search requests full detail, still capped at five results, and returns businesses discovered through TomTom with an explicit not-onboarded/not-verified label. A syntactically valid public POI phone is retained as plain display text in the card and text fallback when supplied. Missing or malformed phones are omitted. No automatic dialing or contact action is offered. It does not import providers, issue quotes, reserve slots or take payment. Routes require two unambiguous geocoded locations, use GeoJSON longitude/latitude order, and show meters/seconds as km/minute estimates. They do not represent technician availability, tracking or dispatch. Empty results do not fall back to fictional providers.
 
 Taskrabbit's [published locations](https://www.taskrabbit.com/locations) do not include India. Its current MCP schemas are narrower than its global marketplace: postal codes must have five US digits, city/state are US style, and draft links allow only `en-US`. ServiceSetu therefore refuses India before calling Taskrabbit, collects an explicit country, and accepts US requests only. Other countries may have Taskrabbit websites but are not claimed supported by this connector. It never changes an Indian request to an overseas location.
 
@@ -99,3 +99,19 @@ Taskrabbit draft creation/link format is locally tested with protocol doubles; a
 | `README.md`, `docs/external-mcp.md`, `docs/submission.md` | Setup, commands, evidence and remaining acceptance |
 
 Previously present FET, Google Places and handoff work is retained. No seeds, private `.env` values, databases, runtime logs or private conversation evidence belong in GitHub.
+
+## Mandi public contact check on October 24
+
+A fresh read-only call through the updated Python backend initialized MCP, discovered and validated the tool schema, and called `tomtom-fuzzy-search` with `countries: [IN]`, POI index, limit five and `response_detail: full`. It returned four Mandi-area listings and four usable public phone strings. The response included Mandi and Jogindar Nagar addresses; do not imply every result covers central Mandi. Backend card construction retained all four phones, with TomTom attribution and non-onboarded labels. No phone call, provider import, reservation, booking or payment was made.
+
+Customers may manually call a public listing number to confirm coverage, availability, exact work and price. Listing details may be outdated and are not independent verification. A willing business must separately agree to the pilot before an operator creates an actual ServiceSetu provider record. The card cannot select a TomTom result as a bookable ServiceSetu quote or collect payment for it.
+
+All **346 core tests passed in 29.298 seconds**, zero failures/skips; this includes **25 MCP tests** and new coverage for valid, malformed and missing phone fields, geocode separation and discovery leaving booking/payment tables empty. The earlier Mandi ASI:One response was captured. The new phone field is verified through the backend and local card tests only: no browser connection was available to check its live ASI:One rendering. Restart the existing single mock runtime once to load the source change before the next live check; preserve its database and private configuration.
+
+Prompt after the operator restarts the existing runtime:
+
+```text
+@servicesetu TomTom plumbers in Mandi, Himachal Pradesh, India
+```
+
+Check the rendered result and text fallback for public listing phones, credit and discovery labels. Do not claim a telephone call or confirmed booking merely because a number appears. The updated silent video shows the backend and earlier customer responses as separate evidence.

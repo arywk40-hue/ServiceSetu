@@ -22,6 +22,18 @@ def coordinates(value):
     return list(value)
 
 
+def public_business_phone(value):
+    """Accept a listing phone as display text, never arbitrary links or commands."""
+    if not isinstance(value, str):
+        return None
+    value = value.strip()
+    if not re.fullmatch(r'\+?[0-9 ()-]{6,39}', value):
+        return None
+    if not 7 <= len(re.sub(r'\D', '', value)) <= 15:
+        return None
+    return value
+
+
 def normalize_locations(data, country='IN', businesses=False):
     rows = data.get('features', data.get('results'))
     if not isinstance(rows, list):
@@ -51,10 +63,14 @@ def normalize_locations(data, country='IN', businesses=False):
             point = coordinates(point)
         except ExternalError:
             continue
-        result.append({'id': 'tomtom:' + clean_text(row.get('id') or len(result), 150),
+        listing = {'id': 'tomtom:' + clean_text(row.get('id') or len(result), 150),
             'name': clean_text(poi.get('name') or address.get('freeformAddress') or 'Location', 160),
             'address': clean_text(address.get('freeformAddress'), 350), 'position': point,
-            'country': country, 'source': 'tomtom', 'onboarded': False})
+            'country': country, 'source': 'tomtom', 'onboarded': False}
+        phone = public_business_phone(poi.get('phone')) if businesses else None
+        if phone:
+            listing['phone'] = phone
+        result.append(listing)
         if len(result) == 5:
             break
     return result
@@ -76,7 +92,7 @@ class TomTom:
         async def operation(tools):
             # Fuzzy search accepts natural service terms; no guessed POI category codes.
             args = tools.arguments('tomtom-fuzzy-search', {'query': f'{service} in {location}'},
-                {'countries': ['IN'], 'idxSet': 'POI', 'limit': 5, 'response_detail': 'compact'})
+                {'countries': ['IN'], 'idxSet': 'POI', 'limit': 5, 'response_detail': 'full'})
             return normalize_locations(await tools.call('tomtom-fuzzy-search', args), businesses=True)
         return await self.gateway.run('tomtom', operation, owner)
 

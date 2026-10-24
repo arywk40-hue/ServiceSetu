@@ -2,6 +2,7 @@
 from decimal import Decimal, InvalidOperation
 from .cards import envelope
 from .external_mcp import clean_text
+from .discovery import public_business_phone
 
 TOMTOM_CREDIT = 'Location data © TomTom. Discovered businesses; not onboarded or verified by ServiceSetu.'
 TASKRABBIT_LIMIT = 'Taskrabbit marketplace information only. No ServiceSetu reservation, booking or payment. Final price, availability and terms are set on Taskrabbit.'
@@ -14,10 +15,15 @@ def tomtom_results(rows, geocoding=False):
     items, lines = [], [title, TOMTOM_CREDIT]
     for row in rows:
         label = f"{row['name']}\n{row['address']}\nLongitude {row['position'][0]}, latitude {row['position'][1]}"
+        phone = public_business_phone(row.get('phone')) if not geocoding else None
+        if phone:
+            label += '\nPublic listing phone: ' + phone
         lines.append(label)
         items.append({'id': row['id'], 'title': row['name'], 'subtitle': row['address'],
-            'secondary_text': 'Location match' if geocoding else 'Discovered business · not onboarded',
+            'secondary_text': 'Location match' if geocoding else 'Discovered business · not onboarded' + (' · Phone: ' + phone if phone else ''),
             'badges': [{'label': 'TomTom data', 'variant': 'info'}]})
+    if not geocoding:
+        lines.append('You can contact a discovered business directly using its public listing phone, when provided. Confirm the service area, appointment, scope and price with the business. Listing contact details may be outdated. ServiceSetu has not called, verified, reserved or charged these businesses.')
     return envelope('\n\n'.join(lines), 'carousel', {'title': title, 'subtitle': TOMTOM_CREDIT, 'items': items})
 
 

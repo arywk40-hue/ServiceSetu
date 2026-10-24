@@ -1,6 +1,6 @@
 # ServiceSetu handoff documents
 
-The local `ServiceSetu_Demo_v2.mp4` is a 4:54 silent edited walkthrough assembled from actual captures of the new October 24 ASI:One conversation. It is excluded from Git along with raw evidence. Add voiceover and upload the final video yourself; the current official limit is 3–5 minutes. The latest script documents the new 18-event history. Public chat sharing and remote hosting remain outstanding.
+The local `ServiceSetu_Demo_v3.mp4` is a 4:52 silent edited walkthrough assembled from actual captures of the new October 24 ASI:One conversation. It is excluded from Git along with raw evidence. Add voiceover and upload the final video yourself; the current official limit is 3–5 minutes. The latest script documents the new 18-event history. Public chat sharing and remote hosting remain outstanding.
 
 - `ServiceSetu_Showcase_Handoff.docx` is the current implementation and readiness handoff, with test evidence, live blockers, setup commands, payment distinctions and provider/operator responsibilities.
 - `ServiceSetu_Video_Script.docx` is the matching timed voiceover script and new 18-event chat history. The editable public source is [docs/video-script.md](../docs/video-script.md). It distinguishes the successful new mock journey from earlier retries; live Google access is not claimed.
@@ -12,3 +12,5 @@ These documents contain setup variable names and synthetic demo details only. Pr
 Privacy cleanup: the historical Changes and Handoff document had an embedded private chat hyperlink removed. Its original is retained only in ignored private storage. This does not supply a public submission link.
 
 Version 2 starts on the actual chat and uses short captions. It adds the [backend architecture diagram](../docs/architecture.md) and a dedicated FET Dorado source/test section. All 18 FET tests passed again in 1.312 seconds; live wallet checkout is unverified. The original silent video is preserved locally.
+
+Version 3 expands TomTom into three clearly labelled screens: the live read-only backend MCP lookup, the earlier rendered ASI:One Mandi results, and four public listing phone numbers for manual contact. No business was called. The backend/card update passed 346 core tests in 29.298 seconds; live ASI:One rendering of the new phone field remains unchecked because no browser connection is available. The cut is 4:52, silent, with the team credits, architecture and FET section retained. Versions 1 and 2 remain local.
