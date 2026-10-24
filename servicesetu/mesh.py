@@ -95,11 +95,12 @@ def seed_phrase():
 
 def profile(role):
     customer=role=="concierge"
-    return (f"# ServiceSetu {role}\n\n"
+    header=(f"# ServiceSetu {role}\n\n"
         "![tag:innovationlab](https://img.shields.io/badge/innovationlab-3D8BD3)\n"
-        "![tag:hackathon](https://img.shields.io/badge/hackathon-5F43F1)\n\n"
-        +("Request fictional home-service packages at Indian locations. Provide city and locality (PIN optional); booking depends on each provider's declared coverage. Ask show services for the available packages, including cleaning, appliance inspections, repairs and furniture assembly. Provider availability depends on the active demo database. Compare provider agents, see honest trust labels, approve one quote, receive a test booking, and recover from provider cancellation. Try: AC service in Indiranagar Bengaluru tomorrow 10am under INR 1000. Ask show what happened for an audit timeline. " if customer else
-          f"Internal ServiceSetu {role} specialist. Not a customer chat entry point. Accepts typed Work messages only from the Concierge. ")
+        "![tag:hackathon](https://img.shields.io/badge/hackathon-5F43F1)\n\n")
+    if customer:
+        return header+("Book a fictional AC or plumbing visit in Indiranagar, Bengaluru. Compare seeded providers and trust labels, review and approve the exact quote, and approve a fresh replacement if a provider cancels. You can message the provider, confirm completion, or report a problem. Try: AC service in Indiranagar Bengaluru tomorrow 10am under INR 1000. Send show what happened for the full history. TomTom MCP discovers local businesses and may show a public listing phone for you to contact them directly; these listings are not onboarded or verified ServiceSetu providers, and their availability is unknown. Taskrabbit assistance supports US locations through an external handoff and is unavailable in India. The demo booking uses simulated payment. FET is implemented for Dorado testnet only; live wallet checkout is unverified. Stripe and Razorpay test integrations are not used in the demo. Providers and trust data are fictional. No real service or live payment is claimed.\n")
+    return (header+f"Internal ServiceSetu {role} specialist. Not a customer chat entry point. Accepts typed Work messages only from the Concierge. "
         +"Providers, credentials and registry are seeded test data. Payment is simulated, Stripe/Razorpay test mode, or Dorado native FET testnet only; no mainnet payments. Discretionary refunds, payouts and verification overrides require human review.\n")
 
 
