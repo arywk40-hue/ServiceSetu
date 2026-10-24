@@ -1,6 +1,6 @@
 # ServiceSetu submission workbench
 
-**Current readiness:** see the [requirement-by-requirement audit](showcase-readiness.md). Current core tests: **343 passed in 34.247 seconds**, zero failures/skips. The local AC uAgent smoke passed. A new authenticated October 24 ASI:One conversation completed a fresh mock booking/cancellation/replacement journey after safe quote refreshes, with fresh replacement approval and **18 displayed history events**. Backend states were independently checked: original cancelled/refunded, replacement confirmed/paid, both `mock`. Earlier expiry and invalid-address rejection remain recorded; no uninterrupted first-attempt success is claimed. A local **4:44 silent edited walkthrough of actual captures** was generated. The owner still adds voice, uploads it and verifies a public shared-chat URL. Remote hosting is not deployed.
+**Current readiness:** see the [requirement-by-requirement audit](showcase-readiness.md). Current core tests: **343 passed in 34.247 seconds**, zero failures/skips. The local AC uAgent smoke passed. A new authenticated October 24 ASI:One conversation completed a fresh mock booking/cancellation/replacement journey after safe quote refreshes, with fresh replacement approval and **18 displayed history events**. Backend states were independently checked: original cancelled/refunded, replacement confirmed/paid, both `mock`. Earlier expiry and invalid-address rejection remain recorded; no uninterrupted first-attempt success is claimed. A local **4:54 silent edited walkthrough of actual captures** was generated. The owner still adds voice, uploads it and verifies a public shared-chat URL. Remote hosting is not deployed.
 
 **Official submission check October 24:** the [hackpack](https://innovationlab.fetch.ai/events/hackathons/fetch-a-thon-3/hackpack) requires a **3–5 minute video** and **mandatory ASI:One event dashboard submission via the Project Submission Agent**. Follow any separately supplied organizer/Devpost instructions as well. The source and recording package were published at `1220381` before this fresh evidence update.
 
@@ -43,7 +43,7 @@ The optional FET path adds `PAYMENT_MODE=fet_testnet` on Dorado only. Eighteen l
 - ASI:One conversation: full lifecycle observed in the signed-in existing chat. A public shared-chat URL and independent access check remain unverified. Private chat links are excluded from the repository and this handoff.
 - Concierge profile: [ServiceSetu-concierge](https://agentverse.ai/agents/details/agent1q02ftm6eu39lw0vc5kh3uhr4gtkkeqd6jpcaxzn4gyyrc2ac0p9ecvl39sz/profile), registered and active. It rendered without Agentverse sign-in, advertised ACP and Payment Protocol, and exposed a Chat with Agent link to ASI:One. Broad search from a fresh ASI:One account remains unverified.
 - Specialist/provider profiles: all thirteen names, addresses and verified URLs are in `artifacts/registration-manifest.json` and the README.
-- Demo video: `deliverables/ServiceSetu_Silent_Walkthrough.mp4`, local 4:44 silent edited capture walkthrough. Voiceover, public upload and mandatory ASI:One event dashboard submission remain owner actions. See [timed narration](video-script.md).
+- Demo video: `deliverables/ServiceSetu_Demo_v2.mp4`, local 4:54 silent edited capture walkthrough. Voiceover, public upload and mandatory ASI:One event dashboard submission remain owner actions. See [timed narration](video-script.md).
 
 Do not replace these with invented links or present local dispatch as an ASI:One session.
 
@@ -66,7 +66,7 @@ Do not replace these with invented links or present local dispatch as an ASI:One
 - [ ] Public GitHub README contains actual addresses, profile URLs and chat link.
 - [x] Public GitHub source and run instructions published; exact seed-derived addresses included. The successful full-flow chat was observed in the existing signed-in account. Fresh-account discovery and public accessibility of the share link remain pending.
 - [x] Scoped current tracked-file scan found no configured private seed/key/token values or private chat URL patterns; `.env`, databases and token files are ignored and untracked. This is not an exhaustive secret-history certification.
-- [ ] Add voice to the generated 4:44 silent video, upload it, verify the public chat/video links, and submit through the mandatory ASI:One event dashboard Project Submission Agent. Follow additional organizer instructions.
+- [ ] Add voice to the generated 4:54 silent video, upload it, verify the public chat/video links, and submit through the mandatory ASI:One event dashboard Project Submission Agent. Follow additional organizer instructions.
 - [ ] Runtime kept alive through judging.
 
 ## Current video 4 minutes 44 seconds

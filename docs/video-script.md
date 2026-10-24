@@ -1,38 +1,45 @@
 # ServiceSetu silent video and voiceover script
 
-Current cut: **ServiceSetu_Silent_Walkthrough.mp4**, 4 minutes 44 seconds, silent. It is an edited walkthrough assembled from actual ASI:One screen captures, with titles and pauses. It is not continuous real-time screen recording. The owner adds their voice and uploads the final video. Raw captures and video stay local and are excluded from Git.
+Team: **Ariyan Bhakat** and **Palak Mittal**.
+
+Current cut: **ServiceSetu_Demo_v2.mp4**, 4 minutes 54 seconds, silent. It is an edited walkthrough assembled from actual ASI:One screen captures, with short captions, a backend architecture diagram and a dedicated FET implementation section. It is not continuous real-time screen recording. The owner adds their voice and uploads the final video. Raw captures and video stay local and are excluded from Git.
 
 The [official Fetch-A-Thon 3.0 hackpack](https://innovationlab.fetch.ai/events/hackathons/fetch-a-thon-3/hackpack), checked 24 October 2026, specifies a **3–5 minute** video and **mandatory submission through the ASI:One event dashboard Project Submission Agent**. Follow any additional organizer instructions, including Devpost if separately requested.
 
-## What this new conversation proved
+## What the recorded conversation proved
 
 A new authenticated conversation named **Book TomTom Plumbers And AC Service** returned live TomTom Mandi results, then completed a new mock booking and recovery. The successful branch ran on 24 October for **25 October 2026 at 10 AM IST**, maximum INR 1,000. CoolCare at INR 699 was explicitly approved and confirmed, then cancelled through the existing authenticated local operator command. The simulated payment was reversed. Breeze at INR 749 required fresh review and approval, then was confirmed. All **18 history events** rendered. Backend state was checked independently. Earlier quotes in the same conversation expired safely; a short invalid address was rejected and replaced with fictional details. Do not describe the whole session as a first-attempt uninterrupted success.
 
 TomTom remains configured and returned four real discovered business results. Taskrabbit India refusal also rendered. No Taskrabbit draft, reservation or payment was created. Google Places is implemented and tested locally with mocked responses; live Google calls remain disabled.
 
+## Changes in this cut
+
+The opening now starts on the actual chat, with a short title. Long side panels and slogan text were removed. The [architecture diagram](architecture.md) is based on the current Python backend. A dedicated section shows native FET Dorado source and the rerun of all **18 FET tests in 1.312 seconds**. Those tests use ledger doubles; no live FET card, wallet transfer or refund is claimed. The original silent cut is preserved locally.
+
 ## Timed voiceover
 
 | Time | Screen | Suggested narration |
 | --- | --- | --- |
-| 0:00–0:10 | ServiceSetu | This is ServiceSetu, a local service booking and recovery agent inside ASI:One. This silent walkthrough uses actual screens from a new authenticated conversation. Providers are fictional and payments are simulated. |
-| 0:10–0:22 | One Concierge | Customers speak to one Concierge. Thirteen existing agent identities coordinate matching, verification, provider responses, booking, payment, recovery and audit history. The customer does not need a custom frontend. |
-| 0:22–0:40 | Live TomTom discovery | First, TomTom searches for plumbers in Mandi. Four business results appear with TomTom attribution. These are discoveries, not verified or onboarded ServiceSetu providers, and the search does not create a reservation or payment. |
-| 0:40–1:00 | Service request | The customer then requests AC service in Indiranagar, Bengaluru, for the twenty-fifth of October at ten AM, under one thousand rupees. CoolCare offers a visit for six hundred ninety-nine rupees; Breeze offers seven hundred forty-nine. |
-| 1:00–1:12 | Compare providers | The comparison includes scope, price, appointment and honest demo trust labels. Lapsed AC is excluded because its mock credential expires before the service date. |
-| 1:12–1:36 | Review the exact quote | The exact CoolCare quote is reviewed before approval: one AC service visit, its exclusions, the appointment, six hundred ninety-nine rupees, and the temporary hold deadline. Parts or extra work require a new quote. Earlier quotes expired safely, and fresh quotes were requested without changing the expiry protections. |
-| 1:36–1:54 | Explicit approval and mock payment | The current quote is explicitly approved. CoolCare is confirmed with simulated payment paid and no gateway charge. The original approval, payment and confirmation are also recorded in the audit. Backend evidence was checked separately from what ASI:One displays. |
-| 1:54–2:12 | Provider cancellation | Next, the operator uses the existing authenticated control to simulate the assigned provider cancelling. The customer receives the cancellation and the simulated reversal in the same conversation. This represents an unavailable provider; it is not an invented direct message from a real business. |
-| 2:12–2:30 | Recovery within the original limits | Recovery looks for an alternative within the original service, area, appointment and one thousand rupee limit. Breeze is eligible at seven hundred forty-nine rupees. Offering a replacement does not automatically confirm it or reuse the original customer approval. |
-| 2:30–2:52 | Fresh replacement review | The customer reviews Breeze separately. A short invalid address was rejected and corrected using fictional demo details. The new exact quote, exclusions, appointment, price and hold deadline are shown. Fresh approval is required before its separate simulated payment. |
-| 2:52–3:10 | Replacement confirmed | After that fresh approval, Breeze is confirmed for the original appointment. The payment rail again says simulated, with no gateway charge. The database independently confirms the original cancellation and refund status, and this approved replacement. |
-| 3:10–3:24 | Booking history | The customer asks to see what happened. The new conversation displays eighteen recorded events, beginning with the request, quote, temporary hold, exact approval, simulated payment and original confirmation. |
-| 3:24–3:38 | Cancellation and replacement audit | The timeline then explains the provider cancellation, appointment release and constrained replacement search. It shows the new quote, address correction and fresh review, so the recovery can be understood without inspecting a database. |
-| 3:38–3:52 | History completes the journey | The final events record fresh Breeze approval, the separate simulated payment and replacement confirmation. This is the displayed booking history. It does not claim a real service appointment, gateway charge or blockchain transaction. |
-| 3:52–4:02 | Booking lifecycle controls | The confirmed booking card also exposes messaging, message history, completion and problem reporting. Here we show those controls; we do not claim a real service was completed or a problem resolved. |
-| 4:02–4:12 | Taskrabbit geography | Taskrabbit is unavailable for the India request. The response offers TomTom discovery instead of substituting an overseas location. Supported US assistance has a separate external handoff and never confirms a ServiceSetu booking. |
-| 4:12–4:24 | Optional integrations | Google Places is implemented and has twenty-three mocked tests, but live calls are disabled. Optional Dorado FET, Stripe test and Razorpay test code remains separate from this demonstrated mock payment. No live transaction is shown. |
-| 4:24–4:34 | Verification and public source | The current core suite passes three hundred forty-three tests with zero failures or skips. A local AC uAgent journey also passes. These local results are distinct from the actual ASI:One conversation shown here. |
-| 4:34–4:44 | Ready for your voiceover | The fresh journey completed after safe refreshes. Intermittent transport history and remote hosting still need follow-up. A real pilot needs a consenting business, accurate service details and operator-confirmed availability. |
+| 0:00–0:08 | ServiceSetu | This is ServiceSetu. Here’s an AC booking in ASI:One, including recovery when the provider cancels. |
+| 0:08–0:28 | How it works | The customer talks to one Concierge through Agentverse. Behind it, specialist and provider agents handle quotes, approval, booking and recovery. They share a SQLite database. TomTom and Taskrabbit are separate discovery tools. The Payment agent uses the configured payment rail. |
+| 0:28–0:46 | TomTom search | First, TomTom searches for plumbers in Mandi. Four business results appear with TomTom attribution. These are discoveries, not verified or onboarded ServiceSetu providers, and the search does not create a reservation or payment. |
+| 0:46–1:06 | The service request | The customer then requests AC service in Indiranagar, Bengaluru, for the twenty-fifth of October at ten AM, under one thousand rupees. CoolCare offers a visit for six hundred ninety-nine rupees; Breeze offers seven hundred forty-nine. |
+| 1:06–1:18 | Provider comparison | The comparison includes scope, price, appointment and honest demo trust labels. Lapsed AC is excluded because its mock credential expires before the service date. |
+| 1:18–1:42 | The quote | The exact CoolCare quote is reviewed before approval: one AC service visit, its exclusions, the appointment, six hundred ninety-nine rupees, and the temporary hold deadline. Parts or extra work require a new quote. Earlier quotes expired safely, and fresh quotes were requested without changing the expiry protections. |
+| 1:42–2:00 | Approval and confirmation | The current quote is explicitly approved. CoolCare is confirmed with simulated payment paid and no gateway charge. The original approval, payment and confirmation are also recorded in the audit. Backend evidence was checked separately from what ASI:One displays. |
+| 2:00–2:18 | The provider cancels | Next, the operator uses the existing authenticated control to simulate the assigned provider cancelling. The customer receives the cancellation and the simulated reversal in the same conversation. This represents an unavailable provider; it is not an invented direct message from a real business. |
+| 2:18–2:36 | A replacement offer | Recovery looks for an alternative within the original service, area, appointment and one thousand rupee limit. Breeze is eligible at seven hundred forty-nine rupees. Offering a replacement does not automatically confirm it or reuse the original customer approval. |
+| 2:36–2:58 | The replacement quote | The customer reviews Breeze separately. A short invalid address was rejected and corrected using fictional demo details. The new exact quote, exclusions, appointment, price and hold deadline are shown. Fresh approval is required before its separate simulated payment. |
+| 2:58–3:16 | Breeze is confirmed | After that fresh approval, Breeze is confirmed for the original appointment. The payment rail again says simulated, with no gateway charge. The database independently confirms the original cancellation and refund status, and this approved replacement. |
+| 3:16–3:26 | Booking history | The customer asks for the history. It shows the original request, quote, approval, simulated payment and confirmation. |
+| 3:26–3:36 | Cancellation history | Next are the provider cancellation, simulated reversal and replacement search. The original appointment and budget are retained. |
+| 3:36–3:46 | Replacement history | The final events show the corrected demo address, fresh Breeze approval, its simulated payment and the confirmed replacement. |
+| 3:46–3:56 | Booking controls | The confirmed booking card also exposes messaging, message history, completion and problem reporting. Here we show those controls; we do not claim a real service was completed or a problem resolved. |
+| 3:56–4:06 | Taskrabbit in India | Taskrabbit is unavailable for the India request. The response offers TomTom discovery instead of substituting an overseas location. Supported US assistance has a separate external handoff and never confirms a ServiceSetu booking. |
+| 4:06–4:26 | FET testnet payments | FET payments are implemented for Dorado testnet. ServiceSetu uses fet_direct, a native fetch1 wallet and a stored invoice. It checks the ledger transfer and blocks transaction reuse. All eighteen local tests pass. Live wallet signing and ASI:One checkout still need verification. |
+| 4:26–4:34 | Other integrations | Google Places is implemented but live-disabled. Stripe and Razorpay test support remains optional; neither was used for this booking. |
+| 4:34–4:44 | Verification | The core suite passed three hundred forty-three tests. The eighteen FET tests passed again using ledger doubles. These tests do not prove live wallet checkout. |
+| 4:44–4:54 | ServiceSetu | That’s the completed demo. The repository and run instructions are public. A real pilot still needs a consenting provider. |
 
 ## Actual new history
 
