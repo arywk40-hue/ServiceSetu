@@ -12,4 +12,6 @@ artifacts/local/
 *.egg-info/
 .ruff_cache/
 *.log
+deliverables/*.mp4
+deliverables/*.mov
 .DS_Store
